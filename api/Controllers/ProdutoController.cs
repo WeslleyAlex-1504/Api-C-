@@ -1,0 +1,219 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
+using api.DbContext;
+using api.Model.usuario;
+using api.Model.ViaCep;
+using Carter;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.AspNetCore.Http;
+
+public class ProdutoModule : CarterModule
+{
+
+    private readonly IConfiguration _config;
+    private readonly ViaCepService _viaCepService;
+
+    public ProdutoModule(IConfiguration config, ViaCepService viaCepService)
+    {
+        _config = config;
+        _viaCepService = viaCepService;
+    }
+    public override void AddRoutes(IEndpointRouteBuilder app)
+    {
+
+    app.MapPost("/produto", async (HttpRequest request, AppDbContext db) =>
+    {
+        var form = await request.ReadFormAsync();
+
+        var cpf = form["cpf"].ToString();
+        var usuario = await db.usuario.FirstOrDefaultAsync(u => u.Cpf == cpf);
+        if (usuario == null) return Results.NotFound(new { message = "Usuário com este CPF não encontrado." });
+
+        var produto = new ProdutoModel
+        {
+            Nome = form["Nome"],
+            Descricao = form["Descricao"],
+            Valor = decimal.Parse(form["Valor"]),
+            UsuarioId = usuario.Id,
+            Desconto = decimal.Parse(form["Desconto"]),
+            CategoriaId = int.Parse(form["CategoriaId"]),
+            Ativo = bool.Parse(form["Ativo"])
+        };
+
+        var imgFile = form.Files["Img"];
+        if (imgFile != null && imgFile.Length > 0)
+        {
+            using var ms = new MemoryStream();
+            await imgFile.CopyToAsync(ms);
+            produto.Img = Convert.ToBase64String(ms.ToArray());
+        }
+
+        db.produto.Add(produto);
+        await db.SaveChangesAsync();
+
+        return Results.Created($"/produto/{produto.Id}", produto);
+    }).Accepts<ProdutoCreateDados>("multipart/form-data").WithTags("Produtos");
+
+    app.MapPost("/categoria", async (AppDbContext db, CategoriaModel categoria) =>
+    {
+
+    bool existe = await db.categoria.AnyAsync(c => c.Nome == categoria.Nome);
+    if (existe)
+        return Results.BadRequest(new { message = "Já existe uma categoria com este nome." });
+
+    var novaCategoria = new CategoriaModel
+    {
+        Nome = categoria.Nome,
+        Ativo = categoria.Ativo
+    };
+
+    db.categoria.Add(novaCategoria);
+    await db.SaveChangesAsync();
+
+    return Results.Created($"/categoria", novaCategoria);
+
+}).WithTags("Categorias");
+
+    app.MapGet("/produto", async (AppDbContext db, string? vendedorNome, string? categoriaNome, string? nome, decimal? valorMinimo, decimal? valorMaximo) =>
+    {
+        var query = db.produto.AsQueryable();
+
+        if (!string.IsNullOrEmpty(vendedorNome))
+        {
+            var usuarios = db.usuario
+                             .Where(u => u.Nome.Contains(vendedorNome))
+                             .Select(u => u.Id);
+
+            query = query.Where(p => usuarios.Contains(p.UsuarioId));
+        }
+
+        if (!string.IsNullOrEmpty(categoriaNome))
+        {
+            var categorias = db.categoria
+                               .Where(c => c.Nome.Contains(categoriaNome))
+                               .Select(c => c.Id);
+
+            query = query.Where(p => categorias.Contains(p.CategoriaId));
+        }
+
+        if (!string.IsNullOrEmpty(nome))
+        {
+            query = query.Where(p => p.Nome.Contains(nome));
+        }
+
+        if (valorMinimo.HasValue)
+        {
+            query = query.Where(p => p.Valor >= valorMinimo.Value);
+        }
+
+        if (valorMaximo.HasValue)
+        {
+            query = query.Where(p => p.Valor <= valorMaximo.Value);
+        }
+
+        var produtos = await query.ToListAsync();
+        return Results.Ok(produtos);
+    }).WithTags("Produtos");
+
+    app.MapGet("/categoria", async (AppDbContext db, string? nome) =>
+    {
+        var query = db.categoria.AsQueryable();
+
+        if (!string.IsNullOrEmpty(nome))
+        {
+            query = query.Where(p => p.Nome.Contains(nome));
+        }
+
+        var categorias = await query.ToListAsync();
+        return Results.Ok(categorias);
+    }).WithTags("Categorias");
+
+    app.MapDelete("/produto/{id:int}", async (int id, AppDbContext db) =>
+    {
+        var produto = await db.produto.FindAsync(id);
+        if (produto == null)
+        {
+            return Results.NotFound(new { mensagem = "produto não encontrado." });
+        }
+
+        db.produto.Remove(produto);
+        await db.SaveChangesAsync();
+
+        return Results.NoContent();
+    }).WithTags("Produtos");
+
+    app.MapDelete("/categoria/{id:int}", async (int id, AppDbContext db) =>
+    {
+        var categoria = await db.categoria.FindAsync(id);
+        if (categoria == null)
+        {
+            return Results.NotFound(new { mensagem = "categoria não encontrado." });
+        }
+
+        db.categoria.Remove(categoria);
+        await db.SaveChangesAsync();
+
+        return Results.NoContent();
+    }).WithTags("Categorias");
+
+    app.MapPatch("/produto/{id:int}", async (int id, HttpRequest request, AppDbContext db) =>
+{
+    var produtoExistente = await db.produto.FindAsync(id);
+    if (produtoExistente == null)
+        return Results.NotFound(new { message = "Produto não encontrado." });
+
+    var form = await request.ReadFormAsync();
+
+    if (form.ContainsKey("Nome"))
+        produtoExistente.Nome = form["Nome"];
+
+    if (form.ContainsKey("Descricao"))
+        produtoExistente.Descricao = form["Descricao"];
+
+    if (form.ContainsKey("Valor"))
+        produtoExistente.Valor = decimal.Parse(form["Valor"]);
+
+    if (form.ContainsKey("Desconto"))
+        produtoExistente.Desconto = decimal.Parse(form["Desconto"]);
+
+    if (form.ContainsKey("CategoriaId"))
+        produtoExistente.CategoriaId = int.Parse(form["CategoriaId"]);
+
+    if (form.ContainsKey("Ativo"))
+        produtoExistente.Ativo = bool.Parse(form["Ativo"]);
+
+    var imgFile = form.Files["Img"];
+    if (imgFile != null && imgFile.Length > 0)
+    {
+        using var ms = new MemoryStream();
+        await imgFile.CopyToAsync(ms);
+        produtoExistente.Img = Convert.ToBase64String(ms.ToArray());
+    }
+
+    await db.SaveChangesAsync();
+
+    return Results.Ok(produtoExistente);
+}).Accepts<IFormFile>("multipart/form-data").WithTags("Produtos");
+
+    app.MapPatch("/categoria/{id:int}", async (int id, AppDbContext db, CategoriaPatchDados categoriaAtualizada) =>
+    {
+    var categoriaExistente = await db.categoria.FindAsync(id);
+    if (categoriaExistente == null)
+        return Results.NotFound(new { message = "Categoria não encontrada." });
+
+    if (!string.IsNullOrEmpty(categoriaAtualizada.Nome))
+        categoriaExistente.Nome = categoriaAtualizada.Nome;
+
+    if (categoriaAtualizada.Ativo.HasValue)
+        categoriaExistente.Ativo = categoriaAtualizada.Ativo.Value;
+
+    await db.SaveChangesAsync();
+
+    return Results.Ok(categoriaExistente);
+    }).WithTags("Categorias");
+    }
+}

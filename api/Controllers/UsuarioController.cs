@@ -22,6 +22,12 @@ public class UsuarioModule : CarterModule
 
         app.MapPost("/usuarios", async (AppDbContext db, usuarioModel usuario) =>
         {
+
+            bool existe = await db.usuario.AnyAsync(u => u.Email == usuario.Email || u.Cpf == usuario.Cpf || u.Telefone == usuario.Telefone);
+
+            if (existe)
+                return Results.BadRequest(new { message = "E-mail, CPF ou telefone já está registrado." });
+
             var passwordHasher = new PasswordHasher<usuarioModel>();
             usuario.Senha = passwordHasher.HashPassword(usuario, usuario.Senha);
 
@@ -41,10 +47,17 @@ public class UsuarioModule : CarterModule
             };
 
             return Results.Created($"/usuarios/{usuario.Id}", usuarioResponse);
-        });
+        }).WithTags("Usuarios");
 
         app.MapPatch("/usuarios/{id:int}", async (int id, AppDbContext db, usuarioPatchModel usuarioAtualizado) =>
         {
+
+            bool duplicado = await db.usuario.AnyAsync(u => u.Id != id && (u.Email == usuarioAtualizado.Email || u.Cpf == usuarioAtualizado.Cpf || u.Telefone == usuarioAtualizado.Telefone));
+
+            if (duplicado)
+                return Results.BadRequest(new { message = "E-mail, CPF ou telefone já está registrado por outro usuário." });
+
+
             var usuarioExistente = await db.usuario.FindAsync(id);
             if (usuarioExistente == null)
             {
@@ -55,7 +68,10 @@ public class UsuarioModule : CarterModule
                 usuarioExistente.Nome = usuarioAtualizado.Nome;
 
             if (!string.IsNullOrEmpty(usuarioAtualizado.Senha))
-                usuarioExistente.Senha = usuarioAtualizado.Senha;
+            {
+                var passwordHasher = new PasswordHasher<usuarioModel>();
+                usuarioExistente.Senha = passwordHasher.HashPassword(usuarioExistente, usuarioAtualizado.Senha);
+            }
 
             if (!string.IsNullOrEmpty(usuarioAtualizado.Email))
                 usuarioExistente.Email = usuarioAtualizado.Email;
@@ -79,7 +95,7 @@ public class UsuarioModule : CarterModule
 
             return Results.Ok(usuarioExistente);
 
-        });
+        }).WithTags("Usuarios");
 
         app.MapDelete("/usuarios/{id:int}", async (int id, AppDbContext db) =>
         {
@@ -93,7 +109,7 @@ public class UsuarioModule : CarterModule
             await db.SaveChangesAsync();
 
             return Results.NoContent();
-        });
+        }).WithTags("Usuarios");
 
         app.MapGet("/usuarios", async (AppDbContext db,int? id, string? nome, string? email, string? telefone,  string? cpf, int? idade, bool? admin, bool? ativo) =>
         {
@@ -125,13 +141,16 @@ public class UsuarioModule : CarterModule
 
             var usuariosFiltrados = await query.ToListAsync();
             return Results.Ok(usuariosFiltrados);
-        });
+        }).WithTags("Usuarios");
 
         app.MapPost("/login", async (AppDbContext db, IConfiguration _config, string email, string senha) =>
-        {
+        {   
             var usuario = await db.usuario.FirstOrDefaultAsync(u => u.Email == email);
             if (usuario == null)
                 return Results.Unauthorized();
+
+            if (!usuario.Ativo)
+                return Results.BadRequest(new { message = "Usuário inativo. Contate o administrador." });
 
             var passwordHasher = new PasswordHasher<usuarioModel>();
             var resultado = passwordHasher.VerifyHashedPassword(usuario, usuario.Senha, senha);
@@ -171,7 +190,7 @@ public class UsuarioModule : CarterModule
             var tokenString = tokenHandler.WriteToken(token);
 
             return Results.Ok(new { token = tokenString });
-        });
+        }).WithTags("Login");
 
         app.MapGet("/retrieve", async (ClaimsPrincipal user, AppDbContext db) =>
         {
@@ -204,7 +223,19 @@ public class UsuarioModule : CarterModule
 
             return Results.Ok(usuario);
 
-        });
+        }).WithTags("Login");
+
+        app.MapGet("/controleLog", async (AppDbContext db, int? usuarioId) =>
+        {
+            var query = db.controleLog.AsQueryable();
+
+            if (usuarioId.HasValue)
+                query = query.Where(paran => paran.Id == usuarioId.Value);
+
+
+            var controleLog = await query.ToListAsync();
+            return Results.Ok(controleLog);
+        }).WithTags("ControleLog");
 
 
     }

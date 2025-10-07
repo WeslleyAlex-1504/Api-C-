@@ -39,9 +39,15 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 builder.Services.AddCarter();
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddHttpClient<api.Model.ViaCep.ViaCepService>();
 
 builder.Services.AddSwaggerGen(c =>
 {
+
+    c.SupportNonNullableReferenceTypes();
+
+    c.MapType<IFormFile>(() => new OpenApiSchema { Type = "string", Format = "binary" });
+
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "Minha API", Version = "v1" });
 
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
