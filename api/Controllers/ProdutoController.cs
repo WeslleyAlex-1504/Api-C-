@@ -28,37 +28,56 @@ public class ProdutoModule : CarterModule
     {
 
     app.MapPost("/produto", async (HttpRequest request, AppDbContext db) =>
-    {
-        var form = await request.ReadFormAsync();
-
-        var cpf = form["cpf"].ToString();
-        var usuario = await db.usuario.FirstOrDefaultAsync(u => u.Cpf == cpf);
-        if (usuario == null) return Results.NotFound(new { message = "Usuário com este CPF não encontrado." });
-
-        var produto = new ProdutoModel
         {
-            Nome = form["Nome"],
-            Descricao = form["Descricao"],
-            Valor = decimal.Parse(form["Valor"]),
-            UsuarioId = usuario.Id,
-            Desconto = decimal.Parse(form["Desconto"]),
-            CategoriaId = int.Parse(form["CategoriaId"]),
-            Ativo = bool.Parse(form["Ativo"])
-        };
+            var form = await request.ReadFormAsync();
 
-        var imgFile = form.Files["Img"];
-        if (imgFile != null && imgFile.Length > 0)
-        {
-            using var ms = new MemoryStream();
-            await imgFile.CopyToAsync(ms);
-            produto.Img = Convert.ToBase64String(ms.ToArray());
-        }
+            var cpf = form["cpf"].ToString();
+            var usuario = await db.usuario.FirstOrDefaultAsync(u => u.Cpf == cpf);
+            if (usuario == null)
+                return Results.NotFound(new { message = "Usuário com este CPF não encontrado." });
 
-        db.produto.Add(produto);
-        await db.SaveChangesAsync();
+            bool produtoExiste = await db.produto.AnyAsync(p => p.Nome == form["Nome"].ToString() && p.UsuarioId == usuario.Id);
+            if (produtoExiste)
+                return Results.BadRequest(new { message = "Já existe um produto com este nome para este usuário." });
 
-        return Results.Created($"/produto/{produto.Id}", produto);
-    }).Accepts<ProdutoCreateDados>("multipart/form-data").WithTags("Produtos");
+
+            var produto = new ProdutoModel
+            {
+                Nome = form["Nome"],
+                Descricao = form["Descricao"],
+                Valor = decimal.Parse(form["Valor"]),
+                UsuarioId = usuario.Id,
+                Desconto = decimal.Parse(form["Desconto"]),
+                CategoriaId = int.Parse(form["CategoriaId"]),
+                Ativo = bool.Parse(form["Ativo"])
+            };
+
+            var imgFile = form.Files["Img"];
+            if (imgFile != null && imgFile.Length > 0)
+            {
+                using var ms = new MemoryStream();
+                await imgFile.CopyToAsync(ms);
+                produto.Img = Convert.ToBase64String(ms.ToArray());
+            }
+
+            db.produto.Add(produto);
+            await db.SaveChangesAsync();
+
+            if (form.TryGetValue("QtdEstoque", out var qtdEstoqueString) && int.TryParse(qtdEstoqueString, out var qtdEstoque))
+            {
+                var estoque = new EstoqueModel
+                {
+                    ProdutoId = produto.Id,
+                    QtdEstoque = qtdEstoque
+                };
+
+                db.estoque.Add(estoque);
+                await db.SaveChangesAsync();
+            }
+
+            return Results.Created($"/produto/{produto.Id}", produto);
+
+        }).Accepts<ProdutoCreateDados>("multipart/form-data").WithTags("Produtos").RequireAuthorization();
 
     app.MapPost("/categoria", async (AppDbContext db, CategoriaModel categoria) =>
     {
@@ -78,56 +97,61 @@ public class ProdutoModule : CarterModule
 
     return Results.Created($"/categoria", novaCategoria);
 
-}).WithTags("Categorias");
+}).WithTags("Categorias").RequireAuthorization();
 
     app.MapGet("/produto", async (AppDbContext db, string? vendedorNome, string? categoriaNome, string? nome, decimal? valorMinimo, decimal? valorMaximo) =>
-    {
-        var query = db.produto.AsQueryable();
-
-        if (!string.IsNullOrEmpty(vendedorNome))
         {
-            var usuarios = db.usuario
-                             .Where(u => u.Nome.Contains(vendedorNome))
-                             .Select(u => u.Id);
+            var query = db.produto.AsQueryable();
 
-            query = query.Where(p => usuarios.Contains(p.UsuarioId));
-        }
+            if (!string.IsNullOrEmpty(vendedorNome))
+            {
+                var usuarios = db.usuario
+                                 .Where(u => u.Nome.Contains(vendedorNome))
+                                 .Select(u => u.Id);
 
-        if (!string.IsNullOrEmpty(categoriaNome))
-        {
-            var categorias = db.categoria
-                               .Where(c => c.Nome.Contains(categoriaNome))
-                               .Select(c => c.Id);
+                query = query.Where(p => usuarios.Contains(p.UsuarioId));
+            }
 
-            query = query.Where(p => categorias.Contains(p.CategoriaId));
-        }
+            if (!string.IsNullOrEmpty(categoriaNome))
+            {
+                var categorias = db.categoria
+                                   .Where(c => c.Nome.Contains(categoriaNome))
+                                   .Select(c => c.Id);
 
-        if (!string.IsNullOrEmpty(nome))
-        {
-            query = query.Where(p => p.Nome.Contains(nome));
-        }
+                query = query.Where(p => categorias.Contains(p.CategoriaId));
+            }
 
-        if (valorMinimo.HasValue)
-        {
-            query = query.Where(p => p.Valor >= valorMinimo.Value);
-        }
+            if (!string.IsNullOrEmpty(nome))
+            {
+                query = query.Where(p => p.Nome.Contains(nome));
+            }
 
-        if (valorMaximo.HasValue)
-        {
-            query = query.Where(p => p.Valor <= valorMaximo.Value);
-        }
+            if (valorMinimo.HasValue)
+            {
+                query = query.Where(p => p.Valor >= valorMinimo.Value);
+            }
 
-        var produtos = await query.ToListAsync();
-        return Results.Ok(produtos);
-    }).WithTags("Produtos");
+            if (valorMaximo.HasValue)
+            {
+                query = query.Where(p => p.Valor <= valorMaximo.Value);
+            }
 
-    app.MapGet("/categoria", async (AppDbContext db, string? nome) =>
+            var produtos = await query.ToListAsync();
+            return Results.Ok(produtos);
+        }).WithTags("Produtos");
+
+    app.MapGet("/categoria", async (AppDbContext db, string? nome, int? id) =>
     {
         var query = db.categoria.AsQueryable();
 
         if (!string.IsNullOrEmpty(nome))
         {
             query = query.Where(p => p.Nome.Contains(nome));
+        }
+
+        if (id.HasValue)
+        {
+            query = query.Where(p => p.Id == id.Value);
         }
 
         var categorias = await query.ToListAsync();
@@ -146,7 +170,7 @@ public class ProdutoModule : CarterModule
         await db.SaveChangesAsync();
 
         return Results.NoContent();
-    }).WithTags("Produtos");
+    }).WithTags("Produtos").RequireAuthorization();
 
     app.MapDelete("/categoria/{id:int}", async (int id, AppDbContext db) =>
     {
@@ -160,7 +184,7 @@ public class ProdutoModule : CarterModule
         await db.SaveChangesAsync();
 
         return Results.NoContent();
-    }).WithTags("Categorias");
+    }).WithTags("Categorias").RequireAuthorization();
 
     app.MapPatch("/produto/{id:int}", async (int id, HttpRequest request, AppDbContext db) =>
 {
@@ -199,7 +223,7 @@ public class ProdutoModule : CarterModule
     await db.SaveChangesAsync();
 
     return Results.Ok(produtoExistente);
-}).Accepts<IFormFile>("multipart/form-data").WithTags("Produtos");
+}).Accepts<IFormFile>("multipart/form-data").WithTags("Produtos").RequireAuthorization();
 
     app.MapPatch("/categoria/{id:int}", async (int id, AppDbContext db, CategoriaPatchDados categoriaAtualizada) =>
     {
@@ -216,10 +240,14 @@ public class ProdutoModule : CarterModule
     await db.SaveChangesAsync();
 
     return Results.Ok(categoriaExistente);
-    }).WithTags("Categorias");
+    }).WithTags("Categorias").RequireAuthorization();
 
     app.MapPost("/estoque", async (AppDbContext db, EstoqueModel estoque) =>
         {
+
+        var produto = await db.produto.FirstOrDefaultAsync(p => p.Id == estoque.ProdutoId);
+        if (produto == null)
+            return Results.NotFound(new { message = "Produto não encontrado." });
 
         bool existe = await db.estoque.AnyAsync(e => e.ProdutoId == estoque.ProdutoId);
         if (existe)
@@ -231,7 +259,7 @@ public class ProdutoModule : CarterModule
 
         return Results.Created($"/estoque", estoque);
 
-    }).WithTags("Estoque");
+    }).WithTags("Estoque").RequireAuthorization();
 
     app.MapGet("/estoque", async (AppDbContext db, int? ProdutoId) =>
         {
@@ -240,9 +268,40 @@ public class ProdutoModule : CarterModule
             if (ProdutoId.HasValue)
                 query = query.Where(e => e.ProdutoId == ProdutoId.Value);
 
-            var enderecos = await query.ToListAsync();
-            return Results.Ok(enderecos);
+            var estoques = await query.ToListAsync();
+            return Results.Ok(estoques);
 
         }).WithTags("Estoque");
+
+    app.MapDelete("/estoque/{id:int}", async (int id, AppDbContext db) =>
+    {
+        var estoque = await db.estoque.FindAsync(id);
+        if (estoque == null)
+        {
+            return Results.NotFound(new { mensagem = "estoque não encontrado." });
+        }
+
+        db.estoque.Remove(estoque);
+        await db.SaveChangesAsync();
+
+        return Results.NoContent();
+    }).WithTags("Estoque").RequireAuthorization();
+
+    app.MapPatch("/estoque/{id:int}", async (int id, AppDbContext db, EstoquePatchDados estoqueAtualizado) =>
+    {
+    var estoqueExistente = await db.estoque.FindAsync(id);
+    if (estoqueExistente == null)
+        return Results.NotFound(new { message = "Categoria não encontrada." });
+
+    if (estoqueAtualizado.QtdEstoque.HasValue)
+            estoqueExistente.QtdEstoque = estoqueAtualizado.QtdEstoque.Value;
+
+    if (estoqueAtualizado.Ativo.HasValue)
+            estoqueExistente.Ativo = estoqueAtualizado.Ativo.Value;
+
+    await db.SaveChangesAsync();
+
+    return Results.Ok(estoqueExistente);
+    }).WithTags("Estoque").RequireAuthorization();
     }
 }

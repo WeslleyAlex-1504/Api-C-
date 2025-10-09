@@ -95,7 +95,7 @@ public class UsuarioModule : CarterModule
 
             return Results.Ok(usuarioExistente);
 
-        }).WithTags("Usuarios");
+        }).WithTags("Usuarios").RequireAuthorization();
 
         app.MapDelete("/usuarios/{id:int}", async (int id, AppDbContext db) =>
         {
@@ -109,7 +109,7 @@ public class UsuarioModule : CarterModule
             await db.SaveChangesAsync();
 
             return Results.NoContent();
-        }).WithTags("Usuarios");
+        }).WithTags("Usuarios").RequireAuthorization();
 
         app.MapGet("/usuarios", async (AppDbContext db,int? id, string? nome, string? email, string? telefone,  string? cpf, int? idade, bool? admin, bool? ativo) =>
         {
