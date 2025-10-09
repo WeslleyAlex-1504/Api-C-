@@ -10,6 +10,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.AspNetCore.Http;
+using api.Model.produto;
+using System.Runtime.ConstrainedExecution;
 
 public class ProdutoModule : CarterModule
 {
@@ -215,5 +217,32 @@ public class ProdutoModule : CarterModule
 
     return Results.Ok(categoriaExistente);
     }).WithTags("Categorias");
+
+    app.MapPost("/estoque", async (AppDbContext db, EstoqueModel estoque) =>
+        {
+
+        bool existe = await db.estoque.AnyAsync(e => e.ProdutoId == estoque.ProdutoId);
+        if (existe)
+            return Results.BadRequest(new { message = "Já existe estoque para esse produto." });
+
+
+        db.estoque.Add(estoque);
+        await db.SaveChangesAsync();
+
+        return Results.Created($"/estoque", estoque);
+
+    }).WithTags("Estoque");
+
+    app.MapGet("/estoque", async (AppDbContext db, int? ProdutoId) =>
+        {
+            var query = db.estoque.AsQueryable();
+
+            if (ProdutoId.HasValue)
+                query = query.Where(e => e.ProdutoId == ProdutoId.Value);
+
+            var enderecos = await query.ToListAsync();
+            return Results.Ok(enderecos);
+
+        }).WithTags("Estoque");
     }
 }

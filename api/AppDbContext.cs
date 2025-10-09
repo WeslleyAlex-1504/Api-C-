@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using api.Model.usuario;
+using api.Model.produto;
 using api.Model.viaCep;
 
 
@@ -14,5 +15,6 @@ namespace api.DbContext
         public DbSet<EnderecoModel> endereco { get; set; }
         public DbSet<ProdutoModel> produto { get; set; }
         public DbSet<CategoriaModel> categoria { get; set; }
+        public DbSet<EstoqueModel> estoque { get; set; }
     }
 }

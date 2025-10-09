@@ -16,7 +16,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Model\produto\" />
     <Folder Include="Model\viaCep\" />
   </ItemGroup>
 
