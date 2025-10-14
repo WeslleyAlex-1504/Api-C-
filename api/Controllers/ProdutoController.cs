@@ -1,17 +1,18 @@
-using System.IdentityModel.Tokens.Jwt;
+Ôªøusing System.IdentityModel.Tokens.Jwt;
+using System.Runtime.ConstrainedExecution;
 using System.Security.Claims;
 using System.Text;
 using api.DbContext;
+using api.Model.avaliacao;
+using api.Model.produto;
 using api.Model.usuario;
 using api.Model.ViaCep;
 using Carter;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using Microsoft.AspNetCore.Http;
-using api.Model.produto;
-using System.Runtime.ConstrainedExecution;
 
 public class ProdutoModule : CarterModule
 {
@@ -34,11 +35,11 @@ public class ProdutoModule : CarterModule
             var cpf = form["cpf"].ToString();
             var usuario = await db.usuario.FirstOrDefaultAsync(u => u.Cpf == cpf);
             if (usuario == null)
-                return Results.NotFound(new { message = "Usu·rio com este CPF n„o encontrado." });
+                return Results.NotFound(new { message = "Usu√°rio com este CPF n√£o encontrado." });
 
             bool produtoExiste = await db.produto.AnyAsync(p => p.Nome == form["Nome"].ToString() && p.UsuarioId == usuario.Id);
             if (produtoExiste)
-                return Results.BadRequest(new { message = "J· existe um produto com este nome para este usu·rio." });
+                return Results.BadRequest(new { message = "J√° existe um produto com este nome para este usu√°rio." });
 
 
             var produto = new ProdutoModel
@@ -84,7 +85,7 @@ public class ProdutoModule : CarterModule
 
     bool existe = await db.categoria.AnyAsync(c => c.Nome == categoria.Nome);
     if (existe)
-        return Results.BadRequest(new { message = "J· existe uma categoria com este nome." });
+        return Results.BadRequest(new { message = "J√° existe uma categoria com este nome." });
 
     var novaCategoria = new CategoriaModel
     {
@@ -163,7 +164,7 @@ public class ProdutoModule : CarterModule
         var produto = await db.produto.FindAsync(id);
         if (produto == null)
         {
-            return Results.NotFound(new { mensagem = "produto n„o encontrado." });
+            return Results.NotFound(new { mensagem = "produto n√£o encontrado." });
         }
 
         db.produto.Remove(produto);
@@ -177,7 +178,7 @@ public class ProdutoModule : CarterModule
         var categoria = await db.categoria.FindAsync(id);
         if (categoria == null)
         {
-            return Results.NotFound(new { mensagem = "categoria n„o encontrado." });
+            return Results.NotFound(new { mensagem = "categoria n√£o encontrado." });
         }
 
         db.categoria.Remove(categoria);
@@ -190,7 +191,7 @@ public class ProdutoModule : CarterModule
 {
     var produtoExistente = await db.produto.FindAsync(id);
     if (produtoExistente == null)
-        return Results.NotFound(new { message = "Produto n„o encontrado." });
+        return Results.NotFound(new { message = "Produto n√£o encontrado." });
 
     var form = await request.ReadFormAsync();
 
@@ -229,7 +230,7 @@ public class ProdutoModule : CarterModule
     {
     var categoriaExistente = await db.categoria.FindAsync(id);
     if (categoriaExistente == null)
-        return Results.NotFound(new { message = "Categoria n„o encontrada." });
+        return Results.NotFound(new { message = "Categoria n√£o encontrada." });
 
     if (!string.IsNullOrEmpty(categoriaAtualizada.Nome))
         categoriaExistente.Nome = categoriaAtualizada.Nome;
@@ -247,11 +248,11 @@ public class ProdutoModule : CarterModule
 
         var produto = await db.produto.FirstOrDefaultAsync(p => p.Id == estoque.ProdutoId);
         if (produto == null)
-            return Results.NotFound(new { message = "Produto n„o encontrado." });
+            return Results.NotFound(new { message = "Produto n√£o encontrado." });
 
         bool existe = await db.estoque.AnyAsync(e => e.ProdutoId == estoque.ProdutoId);
         if (existe)
-            return Results.BadRequest(new { message = "J· existe estoque para esse produto." });
+            return Results.BadRequest(new { message = "J√° existe estoque para esse produto." });
 
 
         db.estoque.Add(estoque);
@@ -278,7 +279,7 @@ public class ProdutoModule : CarterModule
         var estoque = await db.estoque.FindAsync(id);
         if (estoque == null)
         {
-            return Results.NotFound(new { mensagem = "estoque n„o encontrado." });
+            return Results.NotFound(new { mensagem = "estoque n√£o encontrado." });
         }
 
         db.estoque.Remove(estoque);
@@ -291,7 +292,7 @@ public class ProdutoModule : CarterModule
     {
     var estoqueExistente = await db.estoque.FindAsync(id);
     if (estoqueExistente == null)
-        return Results.NotFound(new { message = "Categoria n„o encontrada." });
+        return Results.NotFound(new { message = "Categoria n√£o encontrada." });
 
     if (estoqueAtualizado.QtdEstoque.HasValue)
             estoqueExistente.QtdEstoque = estoqueAtualizado.QtdEstoque.Value;
@@ -303,5 +304,40 @@ public class ProdutoModule : CarterModule
 
     return Results.Ok(estoqueExistente);
     }).WithTags("Estoque").RequireAuthorization();
+
+    app.MapPost("/avaliacao", async (AppDbContext db, AvaliacaoModel avaliacao) =>
+    {
+        if (avaliacao.Numero < 1 || avaliacao.Numero > 5)
+         return Results.BadRequest(new { message = "A avalia√ß√£o deve ser um n√∫mero entre 1 e 5." });
+
+        var produto = await db.produto.FirstOrDefaultAsync(p => p.Id == avaliacao.ProdutoId);
+        if (produto == null)
+         return Results.NotFound(new { message = "Produto n√£o encontrado." });
+
+        db.avaliacao.Add(avaliacao);
+         await db.SaveChangesAsync();
+
+        return Results.Created($"/avaliacao/{avaliacao.Id}", avaliacao);
+    }).WithTags("Avalia√ß√£o").RequireAuthorization();
+
+    app.MapGet("/avaliacao", async (AppDbContext db, [FromQuery] int produtoId) =>
+    {
+    var existeProduto = await db.produto.AnyAsync(p => p.Id == produtoId);
+    if (!existeProduto)
+        return Results.NotFound(new { message = "Produto n√£o encontrado." });
+
+    var avaliacoes = await db.avaliacao
+        .Where(a => a.ProdutoId == produtoId && a.Ativo == true)
+        .ToListAsync();
+
+    if (avaliacoes.Count == 0)
+        return Results.Ok(new { media = 0f });
+
+    float soma = avaliacoes.Sum(a => a.Numero);
+    float media = soma / avaliacoes.Count;
+
+    return Results.Ok(new { media });
+    }).WithTags("Avalia√ß√£o");
+
     }
 }

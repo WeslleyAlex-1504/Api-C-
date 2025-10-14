@@ -3,6 +3,7 @@ using api.Model.usuario;
 using api.Model.produto;
 using api.Model.viaCep;
 using api.Model.carrinho;
+using api.Model.avaliacao;
 
 
 namespace api.DbContext
@@ -19,5 +20,6 @@ namespace api.DbContext
         public DbSet<EstoqueModel> estoque { get; set; }
         public DbSet<CarrinhoItemModel> itemCarrinho { get; set; }
         public DbSet<FormaPagamentoModel> formaPagamento { get; set; }
+        public DbSet<AvaliacaoModel> avaliacao { get; set; }
     }
 }
