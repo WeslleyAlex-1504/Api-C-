@@ -1,4 +1,4 @@
-using System.IdentityModel.Tokens.Jwt;
+Ôªøusing System.IdentityModel.Tokens.Jwt;
 using System.Runtime.ConstrainedExecution;
 using System.Security.Claims;
 using System.Text;
@@ -31,23 +31,23 @@ public class PagamentoModule : CarterModule
         {
             var usuario = await db.usuario.FirstOrDefaultAsync(u => u.Id == item.UsuarioId);
             if (usuario == null)
-                return Results.NotFound(new { message = "Usu·rio n„o encontrado." });
+                return Results.NotFound(new { message = "Usu√°rio n√£o encontrado." });
 
             var produto = await db.produto.FirstOrDefaultAsync(p => p.Id == item.ProdutoId);
             if (produto == null)
-                return Results.NotFound(new { message = "Produto n„o encontrado." });
+                return Results.NotFound(new { message = "Produto n√£o encontrado." });
 
             var estoque = await db.estoque.FirstOrDefaultAsync(e => e.ProdutoId == item.ProdutoId);
             if (estoque == null || estoque.QtdEstoque <= 0)
-                return Results.BadRequest(new { message = "Produto sem estoque disponÌvel." });
+                return Results.BadRequest(new { message = "Produto sem estoque dispon√≠vel." });
 
             bool existe = await db.itemCarrinho.AnyAsync(ci =>
                 ci.UsuarioId == item.UsuarioId && ci.ProdutoId == item.ProdutoId);
             if (existe)
-                return Results.BadRequest(new { message = "Este produto j· est· no carrinho." });
+                return Results.BadRequest(new { message = "Este produto j√° est√° no carrinho." });
 
             if (item.Qtd > estoque.QtdEstoque)
-                return Results.BadRequest(new { message = $"Quantidade solicitada maior que o estoque disponÌvel ({estoque.QtdEstoque})." });
+                return Results.BadRequest(new { message = $"Quantidade solicitada maior que o estoque dispon√≠vel ({estoque.QtdEstoque})." });
 
             var novoItem = new CarrinhoItemModel
             {
@@ -79,7 +79,7 @@ public class PagamentoModule : CarterModule
                 .ToListAsync();
 
             if (itens.Count == 0)
-                return Results.NotFound(new { message = "Nenhum item encontrado para este usu·rio." });
+                return Results.NotFound(new { message = "Nenhum item encontrado para este usu√°rio." });
 
             return Results.Ok(itens);
         }).WithTags("Carrinho").RequireAuthorization();
@@ -88,7 +88,7 @@ public class PagamentoModule : CarterModule
         {
             var item = await db.itemCarrinho.FirstOrDefaultAsync(ci => ci.Id == id);
             if (item == null)
-                return Results.NotFound(new { message = "Item do carrinho n„o encontrado." });
+                return Results.NotFound(new { message = "Item do carrinho n√£o encontrado." });
 
             var estoque = await db.estoque.FirstOrDefaultAsync(e => e.ProdutoId == item.ProdutoId);
             if (estoque != null)
@@ -107,18 +107,18 @@ public class PagamentoModule : CarterModule
         {
             var item = await db.itemCarrinho.FirstOrDefaultAsync(ci => ci.Id == id);
             if (item == null)
-                return Results.NotFound(new { message = "Item do carrinho n„o encontrado." });
+                return Results.NotFound(new { message = "Item do carrinho n√£o encontrado." });
 
             var estoque = await db.estoque.FirstOrDefaultAsync(e => e.ProdutoId == item.ProdutoId);
             if (estoque == null)
-                return Results.BadRequest(new { message = "Produto sem estoque disponÌvel." });
+                return Results.BadRequest(new { message = "Produto sem estoque dispon√≠vel." });
 
             if (patch.Qtd.HasValue)
             {
                 var diferenca = patch.Qtd.Value - item.Qtd;
 
                 if (diferenca > 0 && diferenca > estoque.QtdEstoque)
-                    return Results.BadRequest(new { message = $"Quantidade solicitada maior que o estoque disponÌvel ({estoque.QtdEstoque})." });
+                    return Results.BadRequest(new { message = $"Quantidade solicitada maior que o estoque dispon√≠vel ({estoque.QtdEstoque})." });
 
                 item.Qtd = patch.Qtd.Value;
                 estoque.QtdEstoque -= diferenca;
@@ -143,7 +143,7 @@ public class PagamentoModule : CarterModule
         {
             bool existe = await db.formaPagamento.AnyAsync(f => f.Nome == dados.Nome);
             if (existe)
-                return Results.BadRequest(new { message = "J· existe uma forma de pagamento com este nome." });
+                return Results.BadRequest(new { message = "J√° existe uma forma de pagamento com este nome." });
 
             db.formaPagamento.Add(dados);
             await db.SaveChangesAsync();
@@ -170,19 +170,19 @@ public class PagamentoModule : CarterModule
         {
             var forma = await db.formaPagamento.FirstOrDefaultAsync(f => f.Id == id);
             if (forma == null)
-                return Results.NotFound(new { message = "Forma de pagamento n„o encontrada." });
+                return Results.NotFound(new { message = "Forma de pagamento n√£o encontrada." });
 
             db.formaPagamento.Remove(forma);
             await db.SaveChangesAsync();
 
-            return Results.Ok(new { message = "Forma de pagamento excluÌda com sucesso." });
+            return Results.Ok(new { message = "Forma de pagamento exclu√≠da com sucesso." });
         }).WithTags("FormaPagamento").RequireAuthorization();
 
         app.MapPatch("/formaPagamento/{id}", async (int id, FormaPagamentoPatchDados dados, AppDbContext db) =>
         {
             var forma = await db.formaPagamento.FirstOrDefaultAsync(f => f.Id == id);
             if (forma == null)
-                return Results.NotFound(new { message = "Forma de pagamento n„o encontrada." });
+                return Results.NotFound(new { message = "Forma de pagamento n√£o encontrada." });
 
             if (!string.IsNullOrEmpty(dados.Nome))
                 forma.Nome = dados.Nome;
@@ -195,5 +195,82 @@ public class PagamentoModule : CarterModule
 
             return Results.Ok(forma);
         }).WithTags("FormaPagamento").RequireAuthorization();
+
+        app.MapPost("/pagamento", async (AppDbContext db, Pagamento pagamento) =>
+        {
+            var novoPagamento = new Pagamento
+            {
+                Status = pagamento.Status,
+                FPagamentoId = pagamento.FPagamentoId,
+                Ativo = pagamento.Ativo,
+                DataCriacao = DateTime.Now,
+                DataPagamento = null
+            };
+
+            db.pagamento.Add(novoPagamento);
+            await db.SaveChangesAsync();
+
+            foreach (var prod in pagamento.Produtos)
+            {
+                var pagamentoProduto = new PagamentoProduto
+                {
+                    pagamentoId = novoPagamento.Id,
+                    ProdutoId = prod.ProdutoId,
+                    Qtd = prod.Qtd
+                };
+                db.pagamentoProduto.Add(pagamentoProduto);
+            }
+
+            await db.SaveChangesAsync();
+
+            return Results.Created($"/pagamento/{novoPagamento.Id}", new
+            {
+                message = "Pagamento criado com sucesso.",
+                pagamento = novoPagamento
+            });
+        }).WithTags("Pagamento").RequireAuthorization();
+
+        app.MapGet("/pagamento", async (AppDbContext db, int? usuarioId) =>
+        {
+            IQueryable<Pagamento> query = db.pagamento.Include(p => p.Produtos);
+
+            if (usuarioId.HasValue)
+            {
+                query = query.Where(p => p.FPagamentoId == usuarioId.Value);
+            }
+
+            var pagamentos = await query.ToListAsync();
+
+            if (pagamentos.Count == 0)
+                return Results.NotFound(new { message = "Nenhum pagamento encontrado." });
+
+            return Results.Ok(pagamentos);
+        }).WithTags("Pagamento").RequireAuthorization();
+
+        app.MapPatch("/pagamento/{id}", async (AppDbContext db, int id, PagamentoPatch pagamentoDados) =>
+        {
+            var pagamento = await db.pagamento.Include(p => p.Produtos).FirstOrDefaultAsync(p => p.Id == id);
+
+            if (pagamento == null)
+                return Results.NotFound(new { message = "Pagamento n√£o encontrado." });
+
+
+            if (!string.IsNullOrWhiteSpace(pagamentoDados.Status))
+            {
+                pagamento.Status = pagamentoDados.Status;
+
+                pagamento.DataPagamento = DateTime.Now;
+            }
+
+            db.pagamento.Update(pagamento);
+            await db.SaveChangesAsync();
+
+            return Results.Ok(new
+            {
+                message = "Pagamento atualizado com sucesso.",
+                pagamento
+            });
+        }).WithTags("Pagamento").RequireAuthorization();
+
     }
 }

@@ -1,9 +1,10 @@
-﻿using Carter;
-using Microsoft.EntityFrameworkCore;
+﻿using System.Text;
 using api.DbContext;
+using Carter;
+using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using System.Text;
 using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -82,6 +83,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseAuthentication();
 app.UseAuthorization();
+
 
 app.MapCarter();
 app.MapControllers();

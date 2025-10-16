@@ -33,3 +33,10 @@ public class ProdutoCreateDados
     public bool? Ativo { get; set; } = true;
     public IFormFile? Img { get; set; } 
 }
+
+public class ProdutoImagem
+{
+    public int Id { get; set; } 
+    public int ProdutoId { get; set; }    
+    public string Imagem { get; set; } = string.Empty; 
+}

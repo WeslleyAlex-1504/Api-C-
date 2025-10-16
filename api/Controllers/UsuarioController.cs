@@ -237,6 +237,64 @@ public class UsuarioModule : CarterModule
             return Results.Ok(controleLog);
         }).WithTags("ControleLog");
 
+        app.MapPost("/usuarioImagem", async (HttpRequest request, AppDbContext db) =>
+        {
+            var form = await request.ReadFormAsync();
 
+            if (!form.TryGetValue("usuarioId", out var usuarioIdString) || !int.TryParse(usuarioIdString, out var usuarioId))
+                return Results.BadRequest(new { message = "UsuarioId é obrigatório." });
+
+            var arquivo = form.Files["imagem"];
+            if (arquivo == null || arquivo.Length == 0)
+                return Results.BadRequest(new { message = "Nenhum arquivo enviado." });
+
+            string base64String;
+            using (var ms = new MemoryStream())
+            {
+                await arquivo.CopyToAsync(ms);
+                base64String = Convert.ToBase64String(ms.ToArray());
+            }
+
+            var existente = await db.usuarioImagem.FirstOrDefaultAsync(u => u.UsuarioId == usuarioId);
+            if (existente != null)
+            {
+                existente.Imagem = base64String;
+                db.usuarioImagem.Update(existente);
+            }
+            else
+            {
+                var img = new UsuarioImagem
+                {
+                    UsuarioId = usuarioId,
+                    Imagem = base64String
+                };
+                db.usuarioImagem.Add(img);
+            }
+
+            await db.SaveChangesAsync();
+            return Results.Ok(new { message = "Imagem de perfil salva com sucesso." });
+
+        }).WithTags("UsuarioImagem").RequireAuthorization();
+
+        app.MapGet("/usuarioImagem/{usuarioId}", async (AppDbContext db, int usuarioId) =>
+        {
+            var img = await db.usuarioImagem.FirstOrDefaultAsync(u => u.UsuarioId == usuarioId);
+            if (img == null)
+                return Results.NotFound(new { message = "Imagem não encontrada." });
+
+            return Results.Ok(img);
+        }).WithTags("UsuarioImagem").RequireAuthorization();
+
+        app.MapDelete("/usuarioImagem/{usuarioId}", async (AppDbContext db, int usuarioId) =>
+        {
+            var img = await db.usuarioImagem.FirstOrDefaultAsync(u => u.UsuarioId == usuarioId);
+            if (img == null)
+                return Results.NotFound(new { message = "Imagem não encontrada." });
+
+            db.usuarioImagem.Remove(img);
+            await db.SaveChangesAsync();
+
+            return Results.Ok(new { message = "Imagem removida com sucesso." });
+        }).WithTags("UsuarioImagem").RequireAuthorization();
     }
 }

@@ -20,4 +20,11 @@
 
         public bool Ativo { get; set; } = true;
     }
+
+    public class UsuarioImagem
+    {
+        public int Id { get; set; }
+        public int UsuarioId { get; set; }
+        public string Imagem { get; set; } = string.Empty;
+    }
 }

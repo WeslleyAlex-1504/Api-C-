@@ -339,5 +339,53 @@ public class ProdutoModule : CarterModule
     return Results.Ok(new { media });
     }).WithTags("Avaliação");
 
+    app.MapPost("/produtoImagem", async (HttpRequest request, AppDbContext db) =>
+        {
+            var form = await request.ReadFormAsync();
+
+            if (!form.TryGetValue("produtoId", out var produtoIdString) || !int.TryParse(produtoIdString, out var produtoId))
+                return Results.BadRequest(new { message = "ProdutoId é obrigatório e deve ser um número." });
+
+            var arquivo = form.Files["imagem"];
+            if (arquivo == null || arquivo.Length == 0)
+                return Results.BadRequest(new { message = "Nenhum arquivo enviado." });
+
+            string base64String;
+            using (var ms = new MemoryStream())
+            {
+                await arquivo.CopyToAsync(ms);
+                base64String = Convert.ToBase64String(ms.ToArray());
+            }
+
+            var img = new ProdutoImagem
+            {
+                ProdutoId = produtoId,
+                Imagem = base64String
+            };
+
+            db.produtoImagem.Add(img);
+            await db.SaveChangesAsync();
+
+            return Results.Created($"/produtoImagem/{img.Id}", new
+            {
+                message = "Imagem adicionada ao produto.",
+                img
+            });
+
+    }).Accepts<ProdutoImagem>("multipart/form-data").WithTags("ProdutoImagem").RequireAuthorization();
+
+    app.MapGet("/produtoImagem/{produtoId}", async (AppDbContext db, int produtoId) =>
+    {
+    var imagens = await db.produtoImagem
+        .Where(i => i.ProdutoId == produtoId)
+        .ToListAsync();
+
+    if (imagens.Count == 0)
+        return Results.NotFound(new { message = "Nenhuma imagem encontrada para este produto." });
+
+    return Results.Ok(imagens);
+    }).WithTags("ProdutoImagem").RequireAuthorization();
+
+
     }
 }
