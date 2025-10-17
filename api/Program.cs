@@ -9,6 +9,17 @@ using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowLocalhost",
+        policy =>
+        {
+            policy.AllowAnyOrigin()
+      .AllowAnyHeader()
+      .AllowAnyMethod();
+        });
+});
+
 var key = Encoding.ASCII.GetBytes(builder.Configuration["Jwt:Secret"]);
 
 builder.Services.AddSingleton(new SymmetricSecurityKey(key));
@@ -82,8 +93,9 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseAuthentication();
+app.UseCors("AllowLocalhost");
 app.UseAuthorization();
-
+app.UseHttpsRedirection();
 
 app.MapCarter();
 app.MapControllers();
