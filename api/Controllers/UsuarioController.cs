@@ -7,6 +7,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using Microsoft.AspNetCore.Mvc;
 
 public class UsuarioModule : CarterModule
 {
@@ -143,17 +144,14 @@ public class UsuarioModule : CarterModule
             return Results.Ok(usuariosFiltrados);
         }).WithTags("Usuarios");
 
-        app.MapPost("/login", async (AppDbContext db, IConfiguration _config, string email, string senha) =>
-        {   
-            var usuario = await db.usuario.FirstOrDefaultAsync(u => u.Email == email);
+        app.MapPost("/login", async (AppDbContext db, IConfiguration _config, [FromBody] LoginRequest req) =>
+        {
+            var usuario = await db.usuario.FirstOrDefaultAsync(u => u.Email == req.Email);
             if (usuario == null)
                 return Results.Unauthorized();
 
-            if (!usuario.Ativo)
-                return Results.BadRequest(new { message = "Usuário inativo. Contate o administrador." });
-
             var passwordHasher = new PasswordHasher<usuarioModel>();
-            var resultado = passwordHasher.VerifyHashedPassword(usuario, usuario.Senha, senha);
+            var resultado = passwordHasher.VerifyHashedPassword(usuario, usuario.Senha, req.Senha);
 
             if (resultado == PasswordVerificationResult.Failed)
                 return Results.Unauthorized();

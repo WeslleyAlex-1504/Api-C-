@@ -27,4 +27,10 @@
         public int UsuarioId { get; set; }
         public string Imagem { get; set; } = string.Empty;
     }
+
+    public class LoginRequest
+    {
+        public string Email { get; set; }
+        public string Senha { get; set; }
+    }
 }
