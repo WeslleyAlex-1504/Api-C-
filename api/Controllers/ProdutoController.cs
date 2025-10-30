@@ -218,7 +218,9 @@ public class ProdutoModule : CarterModule
     {
         using var ms = new MemoryStream();
         await imgFile.CopyToAsync(ms);
-        produtoExistente.Img = Convert.ToBase64String(ms.ToArray());
+        var base64 = Convert.ToBase64String(ms.ToArray());
+        var contentType = imgFile.ContentType ?? "image/jpeg"; // pega tipo real
+        produtoExistente.Img = $"data:{contentType};base64,{base64}";
     }
 
     await db.SaveChangesAsync();
