@@ -134,7 +134,7 @@ public class ProdutoModule : CarterModule
 
             if (id.HasValue)
             {
-                query = query.Where(p => p.Id >= id.Value);
+                query = query.Where(p => p.Id == id.Value);
             }
 
             if (valorMaximo.HasValue)
