@@ -100,7 +100,7 @@ public class ProdutoModule : CarterModule
 
 }).WithTags("Categorias").RequireAuthorization();
 
-    app.MapGet("/produto", async (AppDbContext db, string? vendedorNome, string? categoriaNome, string? nome, decimal? valorMinimo, decimal? valorMaximo) =>
+    app.MapGet("/produto", async (AppDbContext db,int? id, string? vendedorNome, string? categoriaNome, string? nome, decimal? valorMinimo, decimal? valorMaximo) =>
         {
             var query = db.produto.AsQueryable();
 
@@ -130,6 +130,11 @@ public class ProdutoModule : CarterModule
             if (valorMinimo.HasValue)
             {
                 query = query.Where(p => p.Valor >= valorMinimo.Value);
+            }
+
+            if (id.HasValue)
+            {
+                query = query.Where(p => p.Id >= id.Value);
             }
 
             if (valorMaximo.HasValue)
@@ -219,7 +224,7 @@ public class ProdutoModule : CarterModule
         using var ms = new MemoryStream();
         await imgFile.CopyToAsync(ms);
         var base64 = Convert.ToBase64String(ms.ToArray());
-        var contentType = imgFile.ContentType ?? "image/jpeg"; // pega tipo real
+        var contentType = imgFile.ContentType ?? "image/jpeg";
         produtoExistente.Img = $"data:{contentType};base64,{base64}";
     }
 
