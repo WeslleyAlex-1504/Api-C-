@@ -9,6 +9,8 @@ public class ProdutoModel
     public decimal Desconto { get; set; } = 0;
     public int CategoriaId { get; set; }
     public bool Ativo { get; set; } = true;
+    public string Estado { get; set; }  
+    public string Cep { get; set; }
 }
 
 public class ProdutoPatchDados
@@ -20,6 +22,8 @@ public class ProdutoPatchDados
     public decimal? Desconto { get; set; }
     public int? CategoriaId { get; set; }
     public bool? Ativo { get; set; }
+    public string? Estado { get; set; } 
+    public string? Cep { get; set; }
 }
 
 public class ProdutoCreateDados
@@ -31,7 +35,9 @@ public class ProdutoCreateDados
     public decimal? Desconto { get; set; } = 0;
     public int CategoriaId { get; set; }
     public bool? Ativo { get; set; } = true;
-    public IFormFile? Img { get; set; } 
+    public IFormFile? Img { get; set; }
+    public string Estado { get; set; }
+    public string Cep { get; set; }
 }
 
 public class ProdutoImagem

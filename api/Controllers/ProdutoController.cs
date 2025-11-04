@@ -50,7 +50,9 @@ public class ProdutoModule : CarterModule
                 UsuarioId = usuario.Id,
                 Desconto = decimal.Parse(form["Desconto"]),
                 CategoriaId = int.Parse(form["CategoriaId"]),
-                Ativo = bool.Parse(form["Ativo"])
+                Ativo = bool.Parse(form["Ativo"]),
+                Estado = form["Estado"],
+                Cep = form["Cep"],
             };
 
             var imgFile = form.Files["Img"];
