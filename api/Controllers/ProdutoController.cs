@@ -30,57 +30,101 @@ public class ProdutoModule : CarterModule
 
     app.MapPost("/produto", async (HttpRequest request, AppDbContext db) =>
         {
-            var form = await request.ReadFormAsync();
+            using var transaction = await db.Database.BeginTransactionAsync();
 
-            var cpf = form["cpf"].ToString();
-            var usuario = await db.usuario.FirstOrDefaultAsync(u => u.Cpf == cpf);
-            if (usuario == null)
-                return Results.NotFound(new { message = "Usuário com este CPF não encontrado." });
-
-            bool produtoExiste = await db.produto.AnyAsync(p => p.Nome == form["Nome"].ToString() && p.UsuarioId == usuario.Id);
-            if (produtoExiste)
-                return Results.BadRequest(new { message = "Já existe um produto com este nome para este usuário." });
-
-
-            var produto = new ProdutoModel
+            try
             {
-                Nome = form["Nome"],
-                Descricao = form["Descricao"],
-                Valor = decimal.Parse(form["Valor"]),
-                UsuarioId = usuario.Id,
-                Desconto = decimal.Parse(form["Desconto"]),
-                CategoriaId = int.Parse(form["CategoriaId"]),
-                Ativo = bool.Parse(form["Ativo"]),
-                Estado = form["Estado"],
-                Cep = form["Cep"],
-            };
+                var form = await request.ReadFormAsync();
 
-            var imgFile = form.Files["Img"];
-            if (imgFile != null && imgFile.Length > 0)
-            {
-                using var ms = new MemoryStream();
-                await imgFile.CopyToAsync(ms);
-                produto.Img = Convert.ToBase64String(ms.ToArray());
-            }
-
-            db.produto.Add(produto);
-            await db.SaveChangesAsync();
-
-            if (form.TryGetValue("QtdEstoque", out var qtdEstoqueString) && int.TryParse(qtdEstoqueString, out var qtdEstoque))
-            {
-                var estoque = new EstoqueModel
+                if (!form.TryGetValue("UsuarioId", out var usuarioIdString) ||
+                    !int.TryParse(usuarioIdString, out int usuarioId))
                 {
-                    ProdutoId = produto.Id,
-                    QtdEstoque = qtdEstoque
+                    return Results.BadRequest(new { message = "UsuarioId inválido ou não enviado." });
+                }
+
+                var usuario = await db.usuario.FirstOrDefaultAsync(u => u.Id == usuarioId);
+                if (usuario == null)
+                    return Results.NotFound(new { message = "Usuário não encontrado." });
+
+                bool produtoExiste = await db.produto.AnyAsync(p =>
+                    p.Nome == form["Nome"].ToString() &&
+                    p.UsuarioId == usuario.Id
+                );
+
+                if (produtoExiste)
+                    return Results.BadRequest(new { message = "Já existe um produto com este nome para este usuário." });
+
+                var produto = new ProdutoModel
+                {
+                    Nome = form["Nome"],
+                    Descricao = form["Descricao"],
+                    Valor = decimal.Parse(form["Valor"]),
+                    UsuarioId = usuario.Id,
+                    Desconto = decimal.Parse(form["Desconto"]),
+                    CategoriaId = int.Parse(form["CategoriaId"]),
+                    Ativo = bool.Parse(form["Ativo"]),
+                    Estado = form["Estado"],
+                    Cep = form["Cep"],
                 };
 
-                db.estoque.Add(estoque);
+                var imgFile = form.Files["Img"];
+                if (imgFile != null && imgFile.Length > 0)
+                {
+                    using var ms = new MemoryStream();
+                    await imgFile.CopyToAsync(ms);
+                    produto.Img = Convert.ToBase64String(ms.ToArray());
+                }
+
+                db.produto.Add(produto);
                 await db.SaveChangesAsync();
+
+                var imagensExtras = form.Files.GetFiles("Imagens");
+
+                foreach (var arquivo in imagensExtras)
+                {
+                    if (arquivo.Length == 0)
+                        continue;
+
+                    using var ms = new MemoryStream();
+                    await arquivo.CopyToAsync(ms);
+
+                    db.produtoImagem.Add(new ProdutoImagem
+                    {
+                        ProdutoId = produto.Id,
+                        Imagem = Convert.ToBase64String(ms.ToArray())
+                    });
+                }
+
+                if (imagensExtras.Count > 0)
+                    await db.SaveChangesAsync();
+
+                if (form.TryGetValue("QtdEstoque", out var qtdEstoqueString) &&
+                    int.TryParse(qtdEstoqueString, out var qtdEstoque))
+                {
+                    db.estoque.Add(new EstoqueModel
+                    {
+                        ProdutoId = produto.Id,
+                        QtdEstoque = qtdEstoque
+                    });
+
+                    await db.SaveChangesAsync();
+                }
+
+                await transaction.CommitAsync();
+
+                return Results.Created($"/produto/{produto.Id}", produto);
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                return Results.BadRequest(new
+                {
+                    message = "Erro ao criar o produto.",
+                    erro = ex.Message
+                });
             }
 
-            return Results.Created($"/produto/{produto.Id}", produto);
-
-        }).Accepts<ProdutoCreateDados>("multipart/form-data").WithTags("Produtos").RequireAuthorization();
+        }).WithTags("Produtos").RequireAuthorization();
 
     app.MapPost("/categoria", async (AppDbContext db, CategoriaModel categoria) =>
     {
@@ -102,9 +146,14 @@ public class ProdutoModule : CarterModule
 
 }).WithTags("Categorias").RequireAuthorization();
 
-    app.MapGet("/produto", async (AppDbContext db,int? id, string? vendedorNome, string? categoriaNome, string? nome, decimal? valorMinimo, decimal? valorMaximo) =>
+    app.MapGet("/produto", async (AppDbContext db,int? id,int? usuarioId, string? vendedorNome, string? categoriaNome, string? nome, decimal? valorMinimo, decimal? valorMaximo, int skip = 0, int take = 20) =>
         {
             var query = db.produto.AsQueryable();
+
+            if (usuarioId.HasValue)
+            {
+                query = query.Where(p => p.UsuarioId == usuarioId.Value);
+            }
 
             if (!string.IsNullOrEmpty(vendedorNome))
             {
@@ -143,6 +192,8 @@ public class ProdutoModule : CarterModule
             {
                 query = query.Where(p => p.Valor <= valorMaximo.Value);
             }
+
+            query = query.Skip(skip).Take(take);
 
             var produtos = await query.ToListAsync();
             return Results.Ok(produtos);

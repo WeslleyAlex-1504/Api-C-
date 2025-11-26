@@ -274,14 +274,28 @@ public class UsuarioModule : CarterModule
 
         }).WithTags("UsuarioImagem").RequireAuthorization();
 
-        app.MapGet("/usuarioImagem/{usuarioId}", async (AppDbContext db, int usuarioId) =>
-        {
-            var img = await db.usuarioImagem.FirstOrDefaultAsync(u => u.UsuarioId == usuarioId);
-            if (img == null)
-                return Results.NotFound(new { message = "Imagem não encontrada." });
+        app.MapGet("/usuarioImagem/{usuarioId}",
+            async (AppDbContext db, int usuarioId, DefaultImagesConfig defaults) =>
+            {
+                var img = await db.usuarioImagem.FirstOrDefaultAsync(u => u.UsuarioId == usuarioId);
 
-            return Results.Ok(img);
-        }).WithTags("UsuarioImagem").RequireAuthorization();
+                if (img == null)
+                {
+                    return Results.Ok(new
+                    {
+                        usuarioId = usuarioId,
+                        imagemBase64 = defaults.UserDefaultImage
+                    });
+                }
+
+                return Results.Ok(new
+                {
+                    usuarioId = img.UsuarioId,
+                    imagemBase64 = img.Imagem
+                });
+            })
+        .WithTags("UsuarioImagem")
+        .RequireAuthorization();
 
         app.MapDelete("/usuarioImagem/{usuarioId}", async (AppDbContext db, int usuarioId) =>
         {

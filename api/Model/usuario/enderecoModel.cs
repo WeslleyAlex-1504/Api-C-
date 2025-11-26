@@ -25,7 +25,7 @@ namespace api.Model.usuario
     {
         public string Cep { get; set; } 
         public int Numero { get; set; }
-        public string UsuarioCpf { get; set; }
+        public int UsuarioId { get; set; }
     }
 
     public class EnderecoPatchDados

@@ -34,3 +34,8 @@
         public string Senha { get; set; }
     }
 }
+
+public class DefaultImagesConfig
+{
+    public string UserDefaultImage { get; set; }
+}

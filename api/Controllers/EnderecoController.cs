@@ -24,15 +24,13 @@ public class EnderecoModule : CarterModule
     {
         app.MapPost("/endereco", async (AppDbContext db, EnderecoCreateDados endereco) =>
         {
-
-            var usuario = await db.usuario.FirstOrDefaultAsync(u => u.Cpf == endereco.UsuarioCpf);
+            var usuario = await db.usuario.FirstOrDefaultAsync(u => u.Id == endereco.UsuarioId);
             if (usuario == null)
-                return Results.NotFound(new { message = "Usuário com este CPF não encontrado." });
+                return Results.NotFound(new { message = "Usuário com este ID não encontrado." });
 
             bool existe = await db.endereco.AnyAsync(e => e.Cep == endereco.Cep && e.UsuarioId == usuario.Id);
             if (existe)
                 return Results.BadRequest(new { message = "Este CEP já está salvo nos seus endereços" });
-
 
             var dadosCep = await _viaCepService.BuscarPorCep(endereco.Cep);
 
@@ -47,10 +45,9 @@ public class EnderecoModule : CarterModule
                 Rua = dadosCep.Logradouro,
                 Cidade = dadosCep.Localidade,
                 Estado = dadosCep.Uf,
-                Pais = dadosCep != null ? "Brasil" : string.Empty,
+                Pais = "Brasil",
                 Ativo = true
             };
-
 
             db.endereco.Add(endereco2);
             await db.SaveChangesAsync();

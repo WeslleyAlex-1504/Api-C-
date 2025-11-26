@@ -20,6 +20,13 @@ builder.Services.AddCors(options =>
         });
 });
 
+var defaultUserImage = builder.Configuration["DefaultImages:User"];
+
+builder.Services.AddSingleton(new DefaultImagesConfig
+{
+    UserDefaultImage = defaultUserImage
+});
+
 var key = Encoding.ASCII.GetBytes(builder.Configuration["Jwt:Secret"]);
 
 builder.Services.AddSingleton(new SymmetricSecurityKey(key));
