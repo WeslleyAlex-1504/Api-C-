@@ -55,6 +55,21 @@ public class CriarPagamentoDTO
 {
     public int UsuarioId { get; set; }
     public List<CriarPagamentoProdutoDTO> Produtos { get; set; } = new();
+
+    // PIX | CARTAO | BOLETO
+    public string Metodo { get; set; }
+
+    // Usado nos 3 métodos
+    public string Email { get; set; }
+
+    // Usado no cartão
+    public string? TokenCartao { get; set; }  // criado no frontend pelo Mercado Pago
+    public int? Parcelas { get; set; }
+
+    // Usado no boleto
+    public string? Nome { get; set; }
+    public string? Sobrenome { get; set; }
+    public string? Cpf { get; set; }
 }
 
 public class CriarPagamentoProdutoDTO

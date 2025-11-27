@@ -9,6 +9,7 @@ using api.Model.produto;
 using api.Model.usuario;
 using api.Model.ViaCep;
 using Carter;
+using MercadoPago.Client.Payment;
 using MercadoPago.Client.Preference;
 using MercadoPago.Config;
 using MercadoPago.Resource.Preference;
@@ -219,7 +220,6 @@ public class PagamentoModule : CarterModule
             foreach (var item in dto.Produtos)
             {
                 var produto = await db.produto.FirstOrDefaultAsync(p => p.Id == item.ProdutoId);
-
                 if (produto == null)
                     return Results.BadRequest($"Produto {item.ProdutoId} não encontrado");
 
@@ -254,7 +254,6 @@ public class PagamentoModule : CarterModule
             db.Pagamento.Add(pagamento);
             await db.SaveChangesAsync();
 
-            // 4. Criar itens do PAGAMENTO local
             foreach (var item in dto.Produtos)
             {
                 db.PagamentoProduto.Add(new PagamentoProduto
@@ -267,44 +266,67 @@ public class PagamentoModule : CarterModule
 
             await db.SaveChangesAsync();
 
-            // 5. 🔥 CRIAR PAGAMENTO NO MERCADO PAGO
-            MercadoPagoConfig.AccessToken = _config["MP_TOKEN"];
+            // 4. 🔥 MERCADO PAGO - PAYMENTS API
+            MercadoPagoConfig.AccessToken = "TEST-967472367753134-112716-5d3416bdeb66cea697a186ab484a68fd-3021463594";
 
-            var preference = new PreferenceRequest
+            var paymentRequest = new PaymentCreateRequest
             {
-                Items = ordem.Itens.Select(i => new PreferenceItemRequest
-                {
-                    Title = $"Produto {i.ProdutoId}",
-                    Quantity = i.Qtd,
-                    UnitPrice = i.PrecoUnitario
-                }).ToList(),
-
-                // Quando MP confirmar, vai chamar seu webhook
+                TransactionAmount = total,
+                Description = $"Pagamento ordem {ordem.Id}",
+                PaymentMethodId = dto.Metodo, // "pix", "credit_card", "ticket"
+                ExternalReference = pagamento.Id.ToString(),
                 NotificationUrl = "https://api-c-atha.onrender.com/webhook/mp",
 
-                // Muito importante para associar o pagamento
-                ExternalReference = pagamento.Id.ToString()
+                // OBRIGATÓRIO PARA TODOS
+                Payer = new PaymentPayerRequest
+                {
+                    Email = dto.Email,
+                    FirstName = dto.Nome
+                }
             };
 
-            var client = new PreferenceClient();
-            var mpResult = await client.CreateAsync(preference);
+            // PIX não precisa mais nada
+            // Cartão requer token + payer info
+            if (dto.Metodo == "credit_card")
+            {
+                paymentRequest.Token = dto.TokenCartao;
+                paymentRequest.Payer = new PaymentPayerRequest
+                {
+                    Email = dto.Email
+                };
+            }
 
-            // 🔗 mpResult.InitPoint = URL para pagar
-            // 🔗 mpResult.Id = ID da preference
+            // Boleto (ticket)
+            if (dto.Metodo == "ticket")
+            {
+                paymentRequest.Payer = new PaymentPayerRequest
+                {
+                    Email = dto.Email,
+                    FirstName = dto.Nome
+                };
+            }
+
+            var client = new PaymentClient();
+            var payment = await client.CreateAsync(paymentRequest);
 
             return Results.Created($"/pagamento/{pagamento.Id}", new
             {
                 ordem,
                 pagamento,
-                mp_url = mpResult.InitPoint,
-                mp_preference_id = mpResult.Id
+                mp_payment_id = payment.Id,
+                status = payment.Status,
+                metodo = dto.Metodo,
+                // PIX retorna QR CODE
+                qr_code = payment.PointOfInteraction?.TransactionData?.QrCode,
+                qr_base64 = payment.PointOfInteraction?.TransactionData?.QrCodeBase64,
+                boleto = payment.PointOfInteraction?.TransactionData?.TicketUrl
             });
 
         }).WithTags("MercadoPago").RequireAuthorization();
 
         app.MapPost("/webhook/mp", async (HttpRequest request, AppDbContext db) =>
         {
-            MercadoPagoConfig.AccessToken = Environment.GetEnvironmentVariable("MP_TOKEN");
+            MercadoPagoConfig.AccessToken = "TEST-967472367753134-112716-5d3416bdeb66cea697a186ab484a68fd-3021463594";
 
             using var reader = new StreamReader(request.Body);
             string body = await reader.ReadToEndAsync();
