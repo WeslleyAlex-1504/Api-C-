@@ -13,6 +13,9 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using MercadoPago.Config;
+using MercadoPago.Client.Preference;
+using MercadoPago.Resource.Preference;
 
 public class PagamentoModule : CarterModule
 {
@@ -196,81 +199,186 @@ public class PagamentoModule : CarterModule
             return Results.Ok(forma);
         }).WithTags("FormaPagamento").RequireAuthorization();
 
-        app.MapPost("/pagamento", async (AppDbContext db, Pagamento pagamento) =>
+        app.MapPost("/pagamento", async (AppDbContext db, CriarPagamentoDTO dto) =>
         {
-            var novoPagamento = new Pagamento
+            // 1. Criar ORDEM
+            var ordem = new Ordem
             {
-                Status = pagamento.Status,
-                FPagamentoId = pagamento.FPagamentoId,
-                Ativo = pagamento.Ativo,
+                UsuarioId = dto.UsuarioId,
                 DataCriacao = DateTime.Now,
-                DataPagamento = null
+                Status = "pendente"
             };
 
-            db.pagamento.Add(novoPagamento);
+            db.Ordem.Add(ordem);
             await db.SaveChangesAsync();
 
-            foreach (var prod in pagamento.Produtos)
+            decimal total = 0;
+
+            // 2. Criar itens da ORDEM
+            foreach (var item in dto.Produtos)
             {
-                var pagamentoProduto = new PagamentoProduto
+                var produto = await db.produto.FirstOrDefaultAsync(p => p.Id == item.ProdutoId);
+
+                if (produto == null)
+                    return Results.BadRequest($"Produto {item.ProdutoId} não encontrado");
+
+                db.OrdemItem.Add(new OrdemItem
                 {
-                    pagamentoId = novoPagamento.Id,
-                    ProdutoId = prod.ProdutoId,
-                    Qtd = prod.Qtd
-                };
-                db.pagamentoProduto.Add(pagamentoProduto);
+                    OrdemId = ordem.Id,
+                    ProdutoId = produto.Id,
+                    Qtd = item.Qtd,
+                    PrecoUnitario = produto.Valor
+                });
+
+                total += produto.Valor * item.Qtd;
+            }
+
+            ordem.Total = total;
+            await db.SaveChangesAsync();
+
+            // 3. Criar PAGAMENTO local
+            var pagamento = new Pagamento
+            {
+                OrdemId = ordem.Id,
+                Status = "pendente",
+                FPagamentoId = 1,
+                DataCriacao = DateTime.Now,
+                Ativo = true
+            };
+
+            db.Pagamento.Add(pagamento);
+            await db.SaveChangesAsync();
+
+            // 4. Criar itens do PAGAMENTO local
+            foreach (var item in dto.Produtos)
+            {
+                db.PagamentoProduto.Add(new PagamentoProduto
+                {
+                    PagamentoId = pagamento.Id,
+                    ProdutoId = item.ProdutoId,
+                    Qtd = item.Qtd
+                });
             }
 
             await db.SaveChangesAsync();
 
-            return Results.Created($"/pagamento/{novoPagamento.Id}", new
+            // 5. 🔥 CRIAR PAGAMENTO NO MERCADO PAGO
+            MercadoPagoConfig.AccessToken = "APP_USR-3999909480146955-112715-c011ea426c83fbfa2cb0994aa6675c7f-3021034784";
+
+            var preference = new PreferenceRequest
             {
-                message = "Pagamento criado com sucesso.",
-                pagamento = novoPagamento
+                Items = ordem.Itens.Select(i => new PreferenceItemRequest
+                {
+                    Title = $"Produto {i.ProdutoId}",
+                    Quantity = i.Qtd,
+                    UnitPrice = i.PrecoUnitario
+                }).ToList(),
+
+                // Quando MP confirmar, vai chamar seu webhook
+                NotificationUrl = "https://suaapi.com/webhook/mp",
+
+                // Muito importante para associar o pagamento
+                ExternalReference = pagamento.Id.ToString()
+            };
+
+            var client = new PreferenceClient();
+            var mpResult = await client.CreateAsync(preference);
+
+            // 🔗 mpResult.InitPoint = URL para pagar
+            // 🔗 mpResult.Id = ID da preference
+
+            return Results.Created($"/pagamento/{pagamento.Id}", new
+            {
+                ordem,
+                pagamento,
+                mp_url = mpResult.InitPoint,
+                mp_preference_id = mpResult.Id
             });
-        }).WithTags("Pagamento").RequireAuthorization();
 
-        app.MapGet("/pagamento", async (AppDbContext db, int? usuarioId) =>
+        }).WithTags("MercadoPago").RequireAuthorization();
+
+        app.MapPost("/webhook/mp", async (HttpRequest request, AppDbContext db) =>
         {
-            IQueryable<Pagamento> query = db.pagamento.Include(p => p.Produtos);
-
-            if (usuarioId.HasValue)
+            try
             {
-                query = query.Where(p => p.FPagamentoId == usuarioId.Value);
+                string body;
+                using (var reader = new StreamReader(request.Body))
+                    body = await reader.ReadToEndAsync();
+
+                var data = System.Text.Json.JsonDocument.Parse(body).RootElement;
+
+                if (!data.TryGetProperty("data", out var dataNode) ||
+                    !dataNode.TryGetProperty("id", out var mpPaymentIdNode))
+                {
+                    return Results.Ok();
+                }
+
+                string mpPaymentId = mpPaymentIdNode.GetString()!;
+
+                var paymentClient = new MercadoPago.Client.Payment.PaymentClient();
+                var mpPayment = await paymentClient.GetAsync(long.Parse(mpPaymentId));
+
+                int pagamentoId = int.Parse(mpPayment.ExternalReference);
+
+                var pagamento = await db.Pagamento.FirstOrDefaultAsync(p => p.Id == pagamentoId);
+
+                if (pagamento == null)
+                    return Results.NotFound($"Pagamento {pagamentoId} não encontrado.");
+
+                var ordem = await db.Ordem.FirstOrDefaultAsync(o => o.Id == pagamento.OrdemId);
+
+                if (ordem == null)
+                    return Results.NotFound($"Ordem {pagamento.OrdemId} não encontrada.");
+
+                switch (mpPayment.Status)
+                {
+                    case "approved":
+                        pagamento.Status = "pago";
+                        pagamento.DataPagamento = DateTime.Now;
+
+                        ordem.Status = "finalizada";
+                        ordem.DataFinalizacao = DateTime.Now;
+                        break;
+
+                    case "pending":
+                        pagamento.Status = "pendente";
+                        break;
+
+                    case "in_process":
+                        pagamento.Status = "em_processamento";
+                        break;
+
+                    case "rejected":
+                        pagamento.Status = "recusado";
+                        break;
+
+                    case "cancelled":
+                        pagamento.Status = "cancelado";
+                        break;
+
+                    case "refunded":
+                        pagamento.Status = "estornado";
+                        break;
+                }
+
+                await db.SaveChangesAsync();
+
+                return Results.Ok(new
+                {
+                    mensagem = "Webhook processado com sucesso",
+                    status = pagamento.Status,
+                    ordem = ordem.Status,
+                    mpPaymentId
+                });
             }
-
-            var pagamentos = await query.ToListAsync();
-
-            if (pagamentos.Count == 0)
-                return Results.NotFound(new { message = "Nenhum pagamento encontrado." });
-
-            return Results.Ok(pagamentos);
-        }).WithTags("Pagamento").RequireAuthorization();
-
-        app.MapPatch("/pagamento/{id}", async (AppDbContext db, int id, PagamentoPatch pagamentoDados) =>
-        {
-            var pagamento = await db.pagamento.Include(p => p.Produtos).FirstOrDefaultAsync(p => p.Id == id);
-
-            if (pagamento == null)
-                return Results.NotFound(new { message = "Pagamento não encontrado." });
-
-
-            if (!string.IsNullOrWhiteSpace(pagamentoDados.Status))
+            catch (Exception ex)
             {
-                pagamento.Status = pagamentoDados.Status;
-
-                pagamento.DataPagamento = DateTime.Now;
+                return Results.BadRequest(new
+                {
+                    erro = ex.Message
+                });
             }
-
-            db.pagamento.Update(pagamento);
-            await db.SaveChangesAsync();
-
-            return Results.Ok(new
-            {
-                message = "Pagamento atualizado com sucesso.",
-                pagamento
-            });
-        }).WithTags("Pagamento").RequireAuthorization();
+        }).WithTags("MercadoPago").AllowAnonymous();
 
     }
 }

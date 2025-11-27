@@ -21,9 +21,11 @@ namespace api.DbContext
         public DbSet<CarrinhoItemModel> itemCarrinho { get; set; }
         public DbSet<FormaPagamentoModel> formaPagamento { get; set; }
         public DbSet<AvaliacaoModel> avaliacao { get; set; }
-        public DbSet<Pagamento> pagamento { get; set; }
-        public DbSet<PagamentoProduto> pagamentoProduto { get; set; }
+        public DbSet<Pagamento> Pagamento { get; set; }
+        public DbSet<PagamentoProduto> PagamentoProduto { get; set; }
         public DbSet<ProdutoImagem> produtoImagem { get; set; }
         public DbSet<UsuarioImagem> usuarioImagem { get; set; }
+        public DbSet<Ordem> Ordem { get; set; }
+        public DbSet<OrdemItem> OrdemItem { get; set; }
     }
 }
