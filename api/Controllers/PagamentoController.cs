@@ -2,20 +2,21 @@
 using System.Runtime.ConstrainedExecution;
 using System.Security.Claims;
 using System.Text;
+using System.Text.Json;
 using api.DbContext;
 using api.Model.carrinho;
 using api.Model.produto;
 using api.Model.usuario;
 using api.Model.ViaCep;
 using Carter;
+using MercadoPago.Client.Preference;
+using MercadoPago.Config;
+using MercadoPago.Resource.Preference;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using MercadoPago.Config;
-using MercadoPago.Client.Preference;
-using MercadoPago.Resource.Preference;
 
 public class PagamentoModule : CarterModule
 {
@@ -236,6 +237,10 @@ public class PagamentoModule : CarterModule
             ordem.Total = total;
             await db.SaveChangesAsync();
 
+            ordem = await db.Ordem
+                .Include(o => o.Itens)
+                .FirstOrDefaultAsync(o => o.Id == ordem.Id);
+
             // 3. Criar PAGAMENTO local
             var pagamento = new Pagamento
             {
@@ -263,7 +268,7 @@ public class PagamentoModule : CarterModule
             await db.SaveChangesAsync();
 
             // 5. 🔥 CRIAR PAGAMENTO NO MERCADO PAGO
-            MercadoPagoConfig.AccessToken = "APP_USR-3999909480146955-112715-c011ea426c83fbfa2cb0994aa6675c7f-3021034784";
+            MercadoPagoConfig.AccessToken = _config["MP_TOKEN"];
 
             var preference = new PreferenceRequest
             {
@@ -275,7 +280,7 @@ public class PagamentoModule : CarterModule
                 }).ToList(),
 
                 // Quando MP confirmar, vai chamar seu webhook
-                NotificationUrl = "https://suaapi.com/webhook/mp",
+                NotificationUrl = "https://api-c-atha.onrender.com/webhook/mp",
 
                 // Muito importante para associar o pagamento
                 ExternalReference = pagamento.Id.ToString()
@@ -299,86 +304,45 @@ public class PagamentoModule : CarterModule
 
         app.MapPost("/webhook/mp", async (HttpRequest request, AppDbContext db) =>
         {
-            try
+            MercadoPagoConfig.AccessToken = Environment.GetEnvironmentVariable("MP_TOKEN");
+
+            using var reader = new StreamReader(request.Body);
+            string body = await reader.ReadToEndAsync();
+
+            var json = JsonDocument.Parse(body).RootElement;
+
+            string? paymentId = null;
+
+            // Caso 1 - MercadoPago envia notification_id
+            if (json.TryGetProperty("data.id", out var id1))
+                paymentId = id1.GetString();
+
+            // Caso 2 - versão nova
+            if (json.TryGetProperty("id", out var id2))
+                paymentId = id2.GetInt64().ToString();
+
+            if (paymentId == null)
+                return Results.Ok();
+
+            var paymentClient = new MercadoPago.Client.Payment.PaymentClient();
+            var mpPayment = await paymentClient.GetAsync(long.Parse(paymentId));
+
+            int pagamentoId = int.Parse(mpPayment.ExternalReference);
+
+            var pagamento = await db.Pagamento.FirstOrDefaultAsync(p => p.Id == pagamentoId);
+            var ordem = await db.Ordem.FirstOrDefaultAsync(o => o.Id == pagamento.OrdemId);
+
+            pagamento.Status = mpPayment.Status;
+            if (mpPayment.Status == "approved")
             {
-                string body;
-                using (var reader = new StreamReader(request.Body))
-                    body = await reader.ReadToEndAsync();
-
-                var data = System.Text.Json.JsonDocument.Parse(body).RootElement;
-
-                if (!data.TryGetProperty("data", out var dataNode) ||
-                    !dataNode.TryGetProperty("id", out var mpPaymentIdNode))
-                {
-                    return Results.Ok();
-                }
-
-                string mpPaymentId = mpPaymentIdNode.GetString()!;
-
-                var paymentClient = new MercadoPago.Client.Payment.PaymentClient();
-                var mpPayment = await paymentClient.GetAsync(long.Parse(mpPaymentId));
-
-                int pagamentoId = int.Parse(mpPayment.ExternalReference);
-
-                var pagamento = await db.Pagamento.FirstOrDefaultAsync(p => p.Id == pagamentoId);
-
-                if (pagamento == null)
-                    return Results.NotFound($"Pagamento {pagamentoId} não encontrado.");
-
-                var ordem = await db.Ordem.FirstOrDefaultAsync(o => o.Id == pagamento.OrdemId);
-
-                if (ordem == null)
-                    return Results.NotFound($"Ordem {pagamento.OrdemId} não encontrada.");
-
-                switch (mpPayment.Status)
-                {
-                    case "approved":
-                        pagamento.Status = "pago";
-                        pagamento.DataPagamento = DateTime.Now;
-
-                        ordem.Status = "finalizada";
-                        ordem.DataFinalizacao = DateTime.Now;
-                        break;
-
-                    case "pending":
-                        pagamento.Status = "pendente";
-                        break;
-
-                    case "in_process":
-                        pagamento.Status = "em_processamento";
-                        break;
-
-                    case "rejected":
-                        pagamento.Status = "recusado";
-                        break;
-
-                    case "cancelled":
-                        pagamento.Status = "cancelado";
-                        break;
-
-                    case "refunded":
-                        pagamento.Status = "estornado";
-                        break;
-                }
-
-                await db.SaveChangesAsync();
-
-                return Results.Ok(new
-                {
-                    mensagem = "Webhook processado com sucesso",
-                    status = pagamento.Status,
-                    ordem = ordem.Status,
-                    mpPaymentId
-                });
+                ordem.Status = "finalizada";
+                ordem.DataFinalizacao = DateTime.Now;
+                pagamento.DataPagamento = DateTime.Now;
             }
-            catch (Exception ex)
-            {
-                return Results.BadRequest(new
-                {
-                    erro = ex.Message
-                });
-            }
-        }).WithTags("MercadoPago").AllowAnonymous();
 
+            await db.SaveChangesAsync();
+
+            return Results.Ok(new { ok = true });
+        });
     }
 }
