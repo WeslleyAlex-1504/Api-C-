@@ -337,7 +337,7 @@ public class PagamentoModule : CarterModule
                 // PIX retorna QR CODE
                 qr_code = payment.PointOfInteraction?.TransactionData?.QrCode,
                 qr_base64 = payment.PointOfInteraction?.TransactionData?.QrCodeBase64,
-                boleto = payment.PointOfInteraction?.TransactionData?.TicketUrl
+                boleto = payment.TransactionDetails?.ExternalResourceUrl
             });
 
         }).WithTags("MercadoPago").RequireAuthorization();
