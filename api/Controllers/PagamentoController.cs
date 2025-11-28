@@ -269,7 +269,7 @@ public class PagamentoModule : CarterModule
             await db.SaveChangesAsync();
 
             // 4. 🔥 MERCADO PAGO - PAYMENTS API
-            MercadoPagoConfig.AccessToken = "APP_USR-967472367753134-112716-d2979df8a36ce96b8337a5898b0cbf91-3021463594";
+            MercadoPagoConfig.AccessToken = "TEST-967472367753134-112716-5d3416bdeb66cea697a186ab484a68fd-3021463594";
 
             var paymentRequest = new PaymentCreateRequest
             {
@@ -344,7 +344,7 @@ public class PagamentoModule : CarterModule
 
         app.MapPost("/webhook/mp", async (HttpRequest request, AppDbContext db) =>
         {
-            MercadoPagoConfig.AccessToken = "APP_USR-967472367753134-112716-d2979df8a36ce96b8337a5898b0cbf91-3021463594";
+            MercadoPagoConfig.AccessToken = "TEST-967472367753134-112716-5d3416bdeb66cea697a186ab484a68fd-3021463594";
 
             using var reader = new StreamReader(request.Body);
             string body = await reader.ReadToEndAsync();
@@ -390,7 +390,7 @@ public class PagamentoModule : CarterModule
             try
             {
                 // Use seu token de TESTE ou PRODUÇÃO
-                MercadoPagoConfig.AccessToken = "APP_USR-967472367753134-112716-d2979df8a36ce96b8337a5898b0cbf91-3021463594";
+                MercadoPagoConfig.AccessToken = "TEST-967472367753134-112716-5d3416bdeb66cea697a186ab484a68fd-3021463594";
 
                 var client = new MercadoPago.Client.PaymentMethod.PaymentMethodClient();
                 var methods = await client.ListAsync();
