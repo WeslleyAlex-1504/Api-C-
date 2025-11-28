@@ -9,6 +9,7 @@ using api.Model.produto;
 using api.Model.usuario;
 using api.Model.ViaCep;
 using Carter;
+using MercadoPago.Client.Common;
 using MercadoPago.Client.Payment;
 using MercadoPago.Client.Preference;
 using MercadoPago.Config;
@@ -18,6 +19,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using System.Globalization;
 
 public class PagamentoModule : CarterModule
 {
@@ -267,11 +269,11 @@ public class PagamentoModule : CarterModule
             await db.SaveChangesAsync();
 
             // 4. 🔥 MERCADO PAGO - PAYMENTS API
-            MercadoPagoConfig.AccessToken = "TEST-967472367753134-112716-5d3416bdeb66cea697a186ab484a68fd-3021463594";
+            MercadoPagoConfig.AccessToken = "APP_USR-967472367753134-112716-d2979df8a36ce96b8337a5898b0cbf91-3021463594";
 
             var paymentRequest = new PaymentCreateRequest
             {
-                TransactionAmount = total,
+                TransactionAmount = decimal.Parse(total.ToString("0.00", CultureInfo.InvariantCulture)),
                 Description = $"Pagamento ordem {ordem.Id}",
                 PaymentMethodId = dto.Metodo, // "pix", "credit_card", "ticket"
                 ExternalReference = pagamento.Id.ToString(),
@@ -297,15 +299,31 @@ public class PagamentoModule : CarterModule
             }
 
             // Boleto (ticket)
-            if (dto.Metodo == "ticket")
+            if (dto.Metodo == "bolbradesco")
             {
+                int numeroRua = dto.Numero;
+
                 paymentRequest.Payer = new PaymentPayerRequest
                 {
                     Email = dto.Email,
-                    FirstName = dto.Nome
+                    FirstName = dto.Nome,
+                    LastName = dto.Sobrenome,
+                    Identification = new IdentificationRequest
+                    {
+                        Type = "CPF",
+                        Number = dto.Cpf
+                    },
+                    Address = new PaymentPayerAddressRequest
+                    {
+                        ZipCode = dto.Cep,
+                        StreetName = dto.Rua,
+                        StreetNumber = dto.Numero,
+                        Neighborhood = dto.Bairro,
+                        City = dto.Cidade,
+                        FederalUnit = dto.Estado
+                    }
                 };
             }
-
             var client = new PaymentClient();
             var payment = await client.CreateAsync(paymentRequest);
 
@@ -326,7 +344,7 @@ public class PagamentoModule : CarterModule
 
         app.MapPost("/webhook/mp", async (HttpRequest request, AppDbContext db) =>
         {
-            MercadoPagoConfig.AccessToken = "TEST-967472367753134-112716-5d3416bdeb66cea697a186ab484a68fd-3021463594";
+            MercadoPagoConfig.AccessToken = "APP_USR-967472367753134-112716-d2979df8a36ce96b8337a5898b0cbf91-3021463594";
 
             using var reader = new StreamReader(request.Body);
             string body = await reader.ReadToEndAsync();
@@ -365,6 +383,33 @@ public class PagamentoModule : CarterModule
             await db.SaveChangesAsync();
 
             return Results.Ok(new { ok = true });
+        });
+
+        app.MapGet("/metodos-mp", async () =>
+        {
+            try
+            {
+                // Use seu token de TESTE ou PRODUÇÃO
+                MercadoPagoConfig.AccessToken = "APP_USR-967472367753134-112716-d2979df8a36ce96b8337a5898b0cbf91-3021463594";
+
+                var client = new MercadoPago.Client.PaymentMethod.PaymentMethodClient();
+                var methods = await client.ListAsync();
+
+                // Retornar somente o essencial
+                var result = methods.Select(m => new
+                {
+                    id = m.Id,
+                    name = m.Name,
+                    payment_type = m.PaymentTypeId,
+                    status = m.Status
+                });
+
+                return Results.Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return Results.Problem($"Erro ao consultar métodos: {ex.Message}");
+            }
         });
     }
 }

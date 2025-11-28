@@ -54,24 +54,23 @@ public class PagamentoPatch
 public class CriarPagamentoDTO
 {
     public int UsuarioId { get; set; }
-    public List<CriarPagamentoProdutoDTO> Produtos { get; set; } = new();
-
-    // PIX | CARTAO | BOLETO
-    public string Metodo { get; set; }
-
-    // Usado nos 3 métodos
+    public string Metodo { get; set; }   // "pix", "credit_card", "bolbradesco"
     public string Email { get; set; }
+    public string Nome { get; set; }
+    public string Sobrenome { get; set; }
+    public string Cpf { get; set; }
 
-    // Usado no cartão
-    public string? TokenCartao { get; set; }  // criado no frontend pelo Mercado Pago
-    public int? Parcelas { get; set; }
+    public string Cep { get; set; }
+    // Street number como int para evitar o erro de conversão
+    public int Numero { get; set; }
+    public string Rua { get; set; }
+    public string Bairro { get; set; }
+    public string Cidade { get; set; }
+    public string Estado { get; set; }   // adicionado
 
-    // Usado no boleto
-    public string? Nome { get; set; }
-    public string? Sobrenome { get; set; }
-    public string? Cpf { get; set; }
+    public string TokenCartao { get; set; } // caso cartão
+    public List<CriarPagamentoProdutoDTO> Produtos { get; set; } = new();
 }
-
 public class CriarPagamentoProdutoDTO
 {
     public int ProdutoId { get; set; }
