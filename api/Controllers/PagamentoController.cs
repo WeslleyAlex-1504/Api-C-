@@ -296,7 +296,13 @@ public class PagamentoModule : CarterModule
                 paymentRequest.Token = dto.TokenCartao;
                 paymentRequest.Payer = new PaymentPayerRequest
                 {
-                    Email = dto.Email
+                    Email = dto.Email,
+                    FirstName = dto.Nome,
+                    Identification = new IdentificationRequest
+                    {
+                        Type = "CPF",
+                        Number = dto.Cpf
+                    }
                 };
             }
 
