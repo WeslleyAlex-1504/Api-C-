@@ -236,6 +236,8 @@ public class PagamentoModule : CarterModule
                 total += produto.Valor * item.Qtd;
             }
 
+            total += dto.Frete;
+
             ordem.Total = total;
             await db.SaveChangesAsync();
 

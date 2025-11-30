@@ -70,9 +70,11 @@ public class CriarPagamentoDTO
 
     public string TokenCartao { get; set; } // caso cartão
     public List<CriarPagamentoProdutoDTO> Produtos { get; set; } = new();
+    public decimal Frete { get; set; }
 }
 public class CriarPagamentoProdutoDTO
 {
     public int ProdutoId { get; set; }
     public int Qtd { get; set; }
 }
+

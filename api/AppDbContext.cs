@@ -27,5 +27,6 @@ namespace api.DbContext
         public DbSet<UsuarioImagem> usuarioImagem { get; set; }
         public DbSet<Ordem> Ordem { get; set; }
         public DbSet<OrdemItem> OrdemItem { get; set; }
+        public DbSet<EnderecoPrincipal> enderecoPrincipal { get; set; }
     }
 }

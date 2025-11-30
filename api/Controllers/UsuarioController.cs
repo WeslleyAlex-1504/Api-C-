@@ -173,13 +173,14 @@ public class UsuarioModule : CarterModule
         new Claim(JwtRegisteredClaimNames.Sub, usuario.Email),
         new Claim("id", usuario.Id.ToString()),
         new Claim("nome", usuario.Nome),
-        new Claim("admin", usuario.Admin.ToString())
+        new Claim("admin", usuario.Admin.ToString()),
+        new Claim("cpf", usuario.Cpf)
     };
 
             var tokenDescriptor = new SecurityTokenDescriptor
             {
                 Subject = new ClaimsIdentity(claims),
-                Expires = DateTime.UtcNow.AddHours(2),
+                Expires = DateTime.UtcNow.AddHours(48),
                 SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
             };
 
