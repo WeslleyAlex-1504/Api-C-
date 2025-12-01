@@ -293,7 +293,7 @@ public class PagamentoModule : CarterModule
             // Cartão requer token + payer info
             if (dto.Metodo == "credit_card")
             {
-                paymentRequest.Token = "master";
+                paymentRequest.Token = dto.TokenCartao;
                 paymentRequest.Payer = new PaymentPayerRequest
                 {
                     Email = dto.Email,
