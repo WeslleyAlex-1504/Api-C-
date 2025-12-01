@@ -12,15 +12,13 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowLocalhost", policy =>
-    {
-        policy.WithOrigins(
-                "https://localhost:5173",   // frontend dev
-                "https://api-c-atha.onrender.com")      // produção
+    options.AddPolicy("AllowLocalhost",
+        policy =>
+        {
+            policy.AllowAnyOrigin()
               .AllowAnyHeader()
-              .AllowAnyMethod()
-              .AllowCredentials();
-    });
+              .AllowAnyMethod();
+        });
 });
 
 var defaultUserImage = builder.Configuration["DefaultImages:User"];
