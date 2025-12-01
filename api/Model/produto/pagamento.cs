@@ -59,7 +59,9 @@ public class CriarPagamentoDTO
     public string Nome { get; set; }
     public string Sobrenome { get; set; }
     public string Cpf { get; set; }
-
+    public int Parcela { get; set; }
+    public string IssuerId { get; set; }
+    public string Bandeira { get; set; }
     public string Cep { get; set; }
     // Street number como int para evitar o erro de conversão
     public int Numero { get; set; }
@@ -86,5 +88,5 @@ public class CartaoDTO
     public string ExpYear { get; set; }
     public string CardholderName { get; set; }
     public string Cpf { get; set; }
-}
+}w
 

@@ -294,6 +294,17 @@ public class PagamentoModule : CarterModule
             if (dto.Metodo == "credit_card")
             {
                 paymentRequest.Token = dto.TokenCartao;
+
+                if (!string.IsNullOrEmpty(dto.Bandeira))
+                    paymentRequest.PaymentMethodId = dto.Bandeira;
+
+                // installments OBRIGATÓRIO (mesmo 1)
+                paymentRequest.Installments = dto.Parcela > 0 ? dto.Parcela : 1;
+
+                if (!string.IsNullOrEmpty(dto.IssuerId))
+                    paymentRequest.IssuerId = dto.IssuerId;
+
+                // payer e identification
                 paymentRequest.Payer = new PaymentPayerRequest
                 {
                     Email = dto.Email,
@@ -301,7 +312,7 @@ public class PagamentoModule : CarterModule
                     Identification = new IdentificationRequest
                     {
                         Type = "CPF",
-                        Number = dto.Cpf
+                        Number = dto.Cpf?.Replace(".", "").Replace("-", "") // só números
                     }
                 };
             }
@@ -441,7 +452,7 @@ public class PagamentoModule : CarterModule
                 };
 
                 var request = new HttpRequestMessage(HttpMethod.Post, "https://api.mercadopago.com/v1/card_tokens");
-                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", "TEST-3d076f3c-d08e-4260-a924-4fb5ef6e6d41");
+                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", "TEST-967472367753134-112716-5d3416bdeb66cea697a186ab484a68fd-3021463594");
                 request.Content = new StringContent(System.Text.Json.JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
 
                 var response = await httpClient.SendAsync(request);
