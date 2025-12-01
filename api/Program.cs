@@ -99,8 +99,9 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseAuthentication();
+app.UseRouting();
 app.UseCors("AllowLocalhost");
+app.UseAuthentication();
 app.UseAuthorization();
 app.UseHttpsRedirection();
 
