@@ -78,3 +78,13 @@ public class CriarPagamentoProdutoDTO
     public int Qtd { get; set; }
 }
 
+public class CartaoDTO
+{
+    public string CardNumber { get; set; }
+    public string Cvv { get; set; }
+    public string ExpMonth { get; set; }
+    public string ExpYear { get; set; }
+    public string CardholderName { get; set; }
+    public string Cpf { get; set; }
+}
+

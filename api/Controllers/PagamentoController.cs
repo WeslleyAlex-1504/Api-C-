@@ -419,5 +419,41 @@ public class PagamentoModule : CarterModule
                 return Results.Problem($"Erro ao consultar métodos: {ex.Message}");
             }
         });
+        app.MapPost("/gerar-token-cartao", async (CartaoDTO cartao, HttpClient httpClient) =>
+        {
+            try
+            {
+                var payload = new
+                {
+                    card_number = cartao.CardNumber,
+                    security_code = cartao.Cvv,
+                    expiration_month = cartao.ExpMonth,
+                    expiration_year = cartao.ExpYear,
+                    cardholder = new
+                    {
+                        name = cartao.CardholderName,
+                        identification = new
+                        {
+                            type = "CPF",
+                            number = cartao.Cpf
+                        }
+                    }
+                };
+
+                var request = new HttpRequestMessage(HttpMethod.Post, "https://api.mercadopago.com/v1/card_tokens");
+                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", "TEST-967472367753134-112716-5d3416bdeb66cea697a186ab484a68fd-3021463594");
+                request.Content = new StringContent(System.Text.Json.JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+
+                var response = await httpClient.SendAsync(request);
+                response.EnsureSuccessStatusCode();
+
+                var json = await response.Content.ReadAsStringAsync();
+                return Results.Ok(json); // Retorna o JSON do token
+            }
+            catch (Exception ex)
+            {
+                return Results.Problem($"Erro ao gerar token do cartão: {ex.Message}");
+            }
+        }).WithTags("MercadoPago").RequireAuthorization();
     }
 }
