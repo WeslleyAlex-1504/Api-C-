@@ -88,5 +88,5 @@ public class CartaoDTO
     public string ExpYear { get; set; }
     public string CardholderName { get; set; }
     public string Cpf { get; set; }
-}w
+}
 
