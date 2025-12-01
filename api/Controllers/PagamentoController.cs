@@ -1,4 +1,5 @@
-﻿using System.IdentityModel.Tokens.Jwt;
+﻿using System.Globalization;
+using System.IdentityModel.Tokens.Jwt;
 using System.Runtime.ConstrainedExecution;
 using System.Security.Claims;
 using System.Text;
@@ -17,9 +18,10 @@ using MercadoPago.Resource.Preference;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using System.Globalization;
+using api.Hubs;
 
 public class PagamentoModule : CarterModule
 {
@@ -203,7 +205,7 @@ public class PagamentoModule : CarterModule
             return Results.Ok(forma);
         }).WithTags("FormaPagamento").RequireAuthorization();
 
-        app.MapPost("/pagamento", async (AppDbContext db, CriarPagamentoDTO dto) =>
+        app.MapPost("/pagamento", async (AppDbContext db, CriarPagamentoDTO dto, IHubContext < MyHub > hub) =>
         {
             // 1. Criar ORDEM
             var ordem = new Ordem
@@ -244,6 +246,8 @@ public class PagamentoModule : CarterModule
             ordem = await db.Ordem
                 .Include(o => o.Itens)
                 .FirstOrDefaultAsync(o => o.Id == ordem.Id);
+
+            await hub.Clients.All.SendAsync("ReceiveMessage", $"Ordem {ordem.Id} criada com total {ordem.Total:C}");
 
             // 3. Criar PAGAMENTO local
             var pagamento = new Pagamento
