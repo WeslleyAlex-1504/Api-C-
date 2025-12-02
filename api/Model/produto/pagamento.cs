@@ -28,6 +28,7 @@ public class Pagamento
     public string Status { get; set; } = string.Empty;
     public int FPagamentoId { get; set; }
     public int OrdemId { get; set; }
+    public Ordem Ordem { get; set; }
     public DateTime DataCriacao { get; set; }
     public DateTime? DataPagamento { get; set; }
     public bool Ativo { get; set; }

@@ -275,7 +275,7 @@ public class PagamentoModule : CarterModule
             await db.SaveChangesAsync();
 
             // 4. 🔥 MERCADO PAGO - PAYMENTS API
-            MercadoPagoConfig.AccessToken = "TEST-967472367753134-112716-5d3416bdeb66cea697a186ab484a68fd-3021463594";
+            MercadoPagoConfig.AccessToken = "APP_USR-967472367753134-112716-d2979df8a36ce96b8337a5898b0cbf91-3021463594";
 
             var paymentRequest = new PaymentCreateRequest
             {
@@ -365,47 +365,59 @@ public class PagamentoModule : CarterModule
 
         }).WithTags("MercadoPago").RequireAuthorization();
 
-        app.MapPost("/webhook/mp", async (HttpRequest request, AppDbContext db) =>
+        app.MapPost("/webhook/mp", async (HttpRequest request, AppDbContext db, IHubContext<MyHub> hub) =>
         {
-            MercadoPagoConfig.AccessToken = "TEST-967472367753134-112716-5d3416bdeb66cea697a186ab484a68fd-3021463594";
+            MercadoPagoConfig.AccessToken = "APP_USR-967472367753134-112716-d2979df8a36ce96b8337a5898b0cbf91-3021463594";
 
             using var reader = new StreamReader(request.Body);
             string body = await reader.ReadToEndAsync();
-
             var json = JsonDocument.Parse(body).RootElement;
 
             string? paymentId = null;
 
-            // Caso 1 - MercadoPago envia notification_id
+            // Obter paymentId do webhook
             if (json.TryGetProperty("data.id", out var id1))
                 paymentId = id1.GetString();
 
-            // Caso 2 - versão nova
             if (json.TryGetProperty("id", out var id2))
                 paymentId = id2.GetInt64().ToString();
 
             if (paymentId == null)
-                return Results.Ok();
+                return Results.Ok(); // nada a fazer
 
+            // Buscar pagamento no MercadoPago
             var paymentClient = new MercadoPago.Client.Payment.PaymentClient();
             var mpPayment = await paymentClient.GetAsync(long.Parse(paymentId));
 
-            int pagamentoId = int.Parse(mpPayment.ExternalReference);
+            // Buscar pagamento local via ExternalReference
+            if (!int.TryParse(mpPayment.ExternalReference, out int pagamentoId))
+                return Results.Ok();
 
-            var pagamento = await db.Pagamento.FirstOrDefaultAsync(p => p.Id == pagamentoId);
-            var ordem = await db.Ordem.FirstOrDefaultAsync(o => o.Id == pagamento.OrdemId);
+            var pagamento = await db.Pagamento.Include(p => p.Ordem).FirstOrDefaultAsync(p => p.Id == pagamentoId);
+            if (pagamento == null)
+                return Results.Ok();
 
+            // Atualizar status local
             pagamento.Status = mpPayment.Status;
             if (mpPayment.Status == "approved")
             {
-                ordem.Status = "finalizada";
-                ordem.DataFinalizacao = DateTime.Now;
+                pagamento.Ordem.Status = "finalizada";
+                pagamento.Ordem.DataFinalizacao = DateTime.Now;
                 pagamento.DataPagamento = DateTime.Now;
             }
 
             await db.SaveChangesAsync();
 
-            return Results.Ok(new { ok = true });
+            // Enviar status via SignalR para todos conectados
+            await hub.Clients.All.SendAsync("ReceiveMessage", new
+            {
+                PagamentoId = pagamento.Id,
+                OrdemId = pagamento.OrdemId,
+                Status = pagamento.Status,
+                Metodo = mpPayment.PaymentMethodId
+            });
+
+            return Results.Ok();
         });
 
         app.MapGet("/metodos-mp", async () =>
@@ -413,7 +425,7 @@ public class PagamentoModule : CarterModule
             try
             {
                 // Use seu token de TESTE ou PRODUÇÃO
-                MercadoPagoConfig.AccessToken = "TEST-967472367753134-112716-5d3416bdeb66cea697a186ab484a68fd-3021463594";
+                MercadoPagoConfig.AccessToken = "APP_USR-967472367753134-112716-d2979df8a36ce96b8337a5898b0cbf91-3021463594";
 
                 var client = new MercadoPago.Client.PaymentMethod.PaymentMethodClient();
                 var methods = await client.ListAsync();
