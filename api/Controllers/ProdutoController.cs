@@ -146,7 +146,7 @@ public class ProdutoModule : CarterModule
 
 }).WithTags("Categorias").RequireAuthorization();
 
-    app.MapGet("/produto", async (AppDbContext db,int? id,int? usuarioId, string? vendedorNome, string? categoriaNome, string? nome, decimal? valorMinimo, decimal? valorMaximo, int skip = 0, int take = 20) =>
+    app.MapGet("/produto", async (AppDbContext db,int? id,int? usuarioId, bool ? ativo, string ? vendedorNome, string? categoriaNome, string? nome, decimal? valorMinimo, decimal? valorMaximo, int skip = 0, int take = 20) =>
         {
             var query = db.produto.AsQueryable();
 
@@ -191,6 +191,11 @@ public class ProdutoModule : CarterModule
             if (valorMaximo.HasValue)
             {
                 query = query.Where(p => p.Valor <= valorMaximo.Value);
+            }
+
+            if (ativo.HasValue)
+            {
+                query = query.Where(p => p.Ativo == ativo.Value);
             }
 
             query = query.Skip(skip).Take(take);
