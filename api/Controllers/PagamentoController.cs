@@ -375,25 +375,48 @@ public class PagamentoModule : CarterModule
 
             string? paymentId = null;
 
-            // Obter paymentId do webhook
-            if (json.TryGetProperty("data.id", out var id1))
-                paymentId = id1.GetString();
+            // Obter paymentId do webhook corretamente
+            if (json.TryGetProperty("data", out var dataElement))
+            {
+                if (dataElement.TryGetProperty("id", out var id))
+                {
+                    paymentId = id.GetString();
+                }
+            }
 
-            if (json.TryGetProperty("id", out var id2))
-                paymentId = id2.GetInt64().ToString();
+            // fallback direto no top-level "id"
+            if (paymentId == null && json.TryGetProperty("id", out var topId))
+            {
+                paymentId = topId.GetString();
+            }
 
             if (paymentId == null)
                 return Results.Ok(); // nada a fazer
 
-            // Buscar pagamento no MercadoPago
+            // Buscar pagamento no MercadoPago com tratamento de erro
             var paymentClient = new MercadoPago.Client.Payment.PaymentClient();
-            var mpPayment = await paymentClient.GetAsync(long.Parse(paymentId));
+            MercadoPago.Resource.Payment.Payment? mpPayment;
+            try
+            {
+                mpPayment = await paymentClient.GetAsync(long.Parse(paymentId));
+            }
+            catch (Exception ex)
+            {
+                // Log ex se quiser
+                return Results.Ok(); // evita crash
+            }
 
-            // Buscar pagamento local via ExternalReference
-            if (!int.TryParse(mpPayment.ExternalReference, out int pagamentoId))
+            if (mpPayment == null || string.IsNullOrEmpty(mpPayment.ExternalReference))
                 return Results.Ok();
 
-            var pagamento = await db.Pagamento.Include(p => p.Ordem).FirstOrDefaultAsync(p => p.Id == pagamentoId);
+            // Buscar pagamento local via ExternalReference
+            if (!int.TryParse(mpPayment.ExternalReference, out int pagamentoIdLocal))
+                return Results.Ok();
+
+            var pagamento = await db.Pagamento
+                .Include(p => p.Ordem)
+                .FirstOrDefaultAsync(p => p.Id == pagamentoIdLocal);
+
             if (pagamento == null)
                 return Results.Ok();
 
@@ -408,7 +431,7 @@ public class PagamentoModule : CarterModule
 
             await db.SaveChangesAsync();
 
-            // Enviar status via SignalR para todos conectados
+            // Enviar status via SignalR
             await hub.Clients.All.SendAsync("ReceiveMessage", new
             {
                 PagamentoId = pagamento.Id,
