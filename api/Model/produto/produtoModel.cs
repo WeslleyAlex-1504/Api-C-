@@ -51,14 +51,14 @@ public class ProdutoImagem
 
 public class CheckoutModel
 {
-    public int Id { get; set; }
+    public int id { get; set; }
 
-    public int UsuarioId { get; set; }
+    public int usuarioId { get; set; }
     public usuarioModel Usuario { get; set; }
 
-    public DateTime DataCriacao { get; set; } = DateTime.Now;
+    public DateTime dataCriacao { get; set; } = DateTime.Now;
 
-    public bool Ativo { get; set; } = true;
+    public bool ativo { get; set; } = true;
 
     public List<CheckoutItemModel> Itens { get; set; }
 }
