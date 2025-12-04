@@ -464,7 +464,7 @@ public class ProdutoModule : CarterModule
 
                 var checkout = new CheckoutModel
                 {
-                    usuarioId = dto.UsuarioId,
+                    UsuarioId = dto.UsuarioId,
                     Itens = new List<CheckoutItemModel>()
                 };
 
@@ -479,7 +479,7 @@ public class ProdutoModule : CarterModule
 
                     checkout.Itens.Add(new CheckoutItemModel
                     {
-                        CheckoutId = checkout.id,
+                        CheckoutId = checkout.Id,
                         ProdutoId = item.ProdutoId,
                         Quantidade = item.Quantidade
                     });
@@ -488,7 +488,7 @@ public class ProdutoModule : CarterModule
                 await db.SaveChangesAsync();
                 await transaction.CommitAsync();
 
-                return Results.Created($"/checkout/{checkout.id}", checkout);
+                return Results.Created($"/checkout/{checkout.Id}", checkout);
             }
             catch (Exception ex)
             {
@@ -511,13 +511,13 @@ public class ProdutoModule : CarterModule
             // 2. Buscar o checkout
             var checkout = await db.checkout
                 .Include(c => c.Itens)
-                .FirstOrDefaultAsync(c => c.id == id);
+                .FirstOrDefaultAsync(c => c.Id == id);
 
             if (checkout == null)
                 return Results.NotFound(new { message = "Checkout não encontrado." });
 
             // 3. Verificar se o checkout pertence ao usuário logado
-            if (checkout.usuarioId != usuarioIdLogado)
+            if (checkout.UsuarioId != usuarioIdLogado)
                 return Results.StatusCode(403); // Forbidden
 
             // 4. Retornar
@@ -528,7 +528,7 @@ public class ProdutoModule : CarterModule
         {
             var checkout = await db.checkout
                 .Include(c => c.Itens)
-                .FirstOrDefaultAsync(c => c.id == id);
+                .FirstOrDefaultAsync(c => c.Id == id);
 
             if (checkout == null)
                 return Results.NotFound(new { message = "Checkout não encontrado." });

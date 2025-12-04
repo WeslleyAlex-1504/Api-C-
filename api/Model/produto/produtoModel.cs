@@ -1,3 +1,6 @@
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json.Serialization;
 using api.Model.usuario;
 
 public class ProdutoModel
@@ -51,36 +54,50 @@ public class ProdutoImagem
 
 public class CheckoutModel
 {
-    public int id { get; set; }
+    [Key]
+    public int Id { get; set; }
 
-    public int usuarioId { get; set; }
-    public usuarioModel Usuario { get; set; }
+    [Column("usuarioId")]
+    public int UsuarioId { get; set; }
 
-    public DateTime dataCriacao { get; set; } = DateTime.Now;
+    [ForeignKey("UsuarioId")]
+    public usuarioModel Usuario { get; set; } = null!;
 
-    public bool ativo { get; set; } = true;
+    [Column("dataCriacao")]
+    public DateTime DataCriacao { get; set; } = DateTime.UtcNow;
 
-    public List<CheckoutItemModel> Itens { get; set; }
+    [Column("ativo")]
+    public bool Ativo { get; set; } = true;
+
+    public List<CheckoutItemModel> Itens { get; set; } = new();
 }
 
 public class CheckoutItemModel
 {
+    [Key]
     public int Id { get; set; }
 
+    [Column("checkoutId")]
     public int CheckoutId { get; set; }
-    public CheckoutModel Checkout { get; set; }
 
+    [ForeignKey("CheckoutId")]
+    [JsonIgnore]
+    public CheckoutModel Checkout { get; set; } = null!;
+
+    [Column("produtoId")]
     public int ProdutoId { get; set; }
-    public ProdutoModel Produto { get; set; }
 
+    [ForeignKey("ProdutoId")]
+    public ProdutoModel Produto { get; set; } = null!;
+
+    [Column("quantidade")]
     public int Quantidade { get; set; }
 }
 
 public class CriarCheckoutDTO
 {
     public int UsuarioId { get; set; }
-
-    public List<ItemDTO> Itens { get; set; }
+    public List<ItemDTO> Itens { get; set; } = new();
 }
 
 public class ItemDTO
