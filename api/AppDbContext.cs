@@ -28,5 +28,7 @@ namespace api.DbContext
         public DbSet<Ordem> Ordem { get; set; }
         public DbSet<OrdemItem> OrdemItem { get; set; }
         public DbSet<EnderecoPrincipal> enderecoPrincipal { get; set; }
+        public DbSet<CheckoutModel> checkout { get; set; }
+        public DbSet<CheckoutItemModel> checkout_item { get; set; }
     }
 }

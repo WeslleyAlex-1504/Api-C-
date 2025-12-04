@@ -1,3 +1,5 @@
+using api.Model.usuario;
+
 public class ProdutoModel
 {
     public int Id { get; set; }
@@ -45,4 +47,44 @@ public class ProdutoImagem
     public int Id { get; set; } 
     public int ProdutoId { get; set; }    
     public string Imagem { get; set; } = string.Empty; 
+}
+
+public class CheckoutModel
+{
+    public int Id { get; set; }
+
+    public int UsuarioId { get; set; }
+    public usuarioModel Usuario { get; set; }
+
+    public DateTime DataCriacao { get; set; } = DateTime.Now;
+
+    public bool Ativo { get; set; } = true;
+
+    public List<CheckoutItemModel> Itens { get; set; }
+}
+
+public class CheckoutItemModel
+{
+    public int Id { get; set; }
+
+    public int CheckoutId { get; set; }
+    public CheckoutModel Checkout { get; set; }
+
+    public int ProdutoId { get; set; }
+    public ProdutoModel Produto { get; set; }
+
+    public int Quantidade { get; set; }
+}
+
+public class CriarCheckoutDTO
+{
+    public int UsuarioId { get; set; }
+
+    public List<ItemDTO> Itens { get; set; }
+}
+
+public class ItemDTO
+{
+    public int ProdutoId { get; set; }
+    public int Quantidade { get; set; }
 }

@@ -452,5 +452,95 @@ public class ProdutoModule : CarterModule
     }).WithTags("ProdutoImagem").RequireAuthorization();
 
 
+    app.MapPost("/checkout", async (AppDbContext db, CriarCheckoutDTO dto) =>
+        {
+            using var transaction = await db.Database.BeginTransactionAsync();
+
+            try
+            {
+                var usuarioExiste = await db.usuario.AnyAsync(u => u.Id == dto.UsuarioId);
+                if (!usuarioExiste)
+                    return Results.BadRequest(new { message = "Usuário não encontrado." });
+
+                var checkout = new CheckoutModel
+                {
+                    UsuarioId = dto.UsuarioId,
+                    Itens = new List<CheckoutItemModel>()
+                };
+
+                db.checkout.Add(checkout);
+                await db.SaveChangesAsync(); // salva para gerar id
+
+                foreach (var item in dto.Itens)
+                {
+                    var produtoExiste = await db.produto.AnyAsync(p => p.Id == item.ProdutoId);
+                    if (!produtoExiste)
+                        return Results.BadRequest(new { message = $"Produto {item.ProdutoId} não encontrado." });
+
+                    checkout.Itens.Add(new CheckoutItemModel
+                    {
+                        CheckoutId = checkout.Id,
+                        ProdutoId = item.ProdutoId,
+                        Quantidade = item.Quantidade
+                    });
+                }
+
+                await db.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                return Results.Created($"/checkout/{checkout.Id}", checkout);
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                return Results.BadRequest(new { message = "Erro ao criar checkout.", erro = ex.Message });
+            }
+
+        }).WithTags("Checkout").RequireAuthorization();
+
+    app.MapGet("/checkout/{id:int}", async (int id, AppDbContext db, HttpContext http) =>
+        {
+            // 1. Recuperar o usuário logado pelo token JWT
+            var userIdClaim = http.User.FindFirst("id")?.Value;
+
+            if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out int usuarioIdLogado))
+            {
+                return Results.Unauthorized();
+            }
+
+            // 2. Buscar o checkout
+            var checkout = await db.checkout
+                .Include(c => c.Itens)
+                .FirstOrDefaultAsync(c => c.Id == id);
+
+            if (checkout == null)
+                return Results.NotFound(new { message = "Checkout não encontrado." });
+
+            // 3. Verificar se o checkout pertence ao usuário logado
+            if (checkout.UsuarioId != usuarioIdLogado)
+                return Results.StatusCode(403); // Forbidden
+
+            // 4. Retornar
+            return Results.Ok(checkout);
+        }).WithTags("Checkout").RequireAuthorization();
+
+    app.MapDelete("/checkout/{id:int}", async (AppDbContext db, int id) =>
+        {
+            var checkout = await db.checkout
+                .Include(c => c.Itens)
+                .FirstOrDefaultAsync(c => c.Id == id);
+
+            if (checkout == null)
+                return Results.NotFound(new { message = "Checkout não encontrado." });
+
+            db.checkout_item.RemoveRange(checkout.Itens);
+            db.checkout.Remove(checkout);
+
+            await db.SaveChangesAsync();
+
+            return Results.NoContent();
+    }).WithTags("Checkout").RequireAuthorization();
+
+
     }
 }
