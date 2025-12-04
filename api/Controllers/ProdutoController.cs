@@ -580,28 +580,33 @@ public class ProdutoModule : CarterModule
                 })
                 .FirstOrDefault();
 
-           
-            var produtoMaisVendido = pagamentosUsuario
+
+            var pagamentosUsuario2 = await db.Pagamento
+                .Where(p => p.Status == "approved" && p.Produtos.Any(pp => pp.Produto.UsuarioId == usuarioId))
+                .Include(p => p.Ordem)
+                    .ThenInclude(o => o.Itens)
+                .Include(p => p.Produtos)          // Inclui os produtos
+                    .ThenInclude(pp => pp.Produto)
+                .ToListAsync();
+
+            var produtoMaisVendido = pagamentosUsuario2
                 .SelectMany(p => p.Produtos)
                 .Where(pp => pp.Produto.UsuarioId == usuarioId)
                 .GroupBy(pp => pp.ProdutoId)
                 .Select(g => new
                 {
-                    ProdutoId = g.Key,
+                    Produto = g.First().Produto,        // pega o produto do primeiro item do grupo
                     QtdVendida = g.Sum(x => x.Qtd)
                 })
                 .OrderByDescending(x => x.QtdVendida)
-                .Join(db.produto,
-                    vendas => vendas.ProdutoId,
-                    prod => prod.Id,
-                    (vendas, prod) => new
-                    {
-                        prod.Nome,
-                        prod.Img,
-                        vendas.QtdVendida,
-                        prod.Valor,
-                        ReceitaGerada = vendas.QtdVendida * prod.Valor
-                    })
+                .Select(x => new
+                {
+                    x.Produto.Nome,
+                    x.Produto.Img,
+                    x.QtdVendida,
+                    x.Produto.Valor,
+                    ReceitaGerada = x.QtdVendida * x.Produto.Valor
+                })
                 .FirstOrDefault();
 
             return Results.Ok(new
