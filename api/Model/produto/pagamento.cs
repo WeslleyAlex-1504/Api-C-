@@ -44,6 +44,7 @@ public class PagamentoProduto
     public int Id { get; set; }
     public int PagamentoId { get; set; }
     public int ProdutoId { get; set; }
+    public ProdutoModel Produto { get; set; }
     public int Qtd { get; set; }
 }
 

@@ -544,39 +544,46 @@ public class ProdutoModule : CarterModule
 
     app.MapGet("/api/dashboard/{usuarioId}", async (int usuarioId, AppDbContext db) =>
         {
-            // Total faturado do usuário
-            var totalFaturado = await db.Pagamento
-                .Where(p => p.Status == "approved" && p.Ordem.UsuarioId == usuarioId)
-                .SumAsync(p => p.Ordem.Total);
-
-            // Total de vendas do usuário
-            var totalVendas = await db.Pagamento
-                .Where(p => p.Status == "approved" && p.Ordem.UsuarioId == usuarioId)
+            
+            var totalProdutos = await db.produto
+                .Where(p => p.UsuarioId == usuarioId)
                 .CountAsync();
 
-            // Total de produtos (isso normalmente é geral, mas você pode adaptar)
-            var totalProdutos = await db.produto.CountAsync();
-
-            // Último pedido aprovado do usuário
-            var ultimoPedido = await db.Pagamento
+            
+            var pagamentosUsuario = await db.Pagamento
+                .Where(p => p.Status == "approved" && p.Produtos.Any(pp => pp.Produto.UsuarioId == usuarioId))
                 .Include(p => p.Ordem)
                 .ThenInclude(o => o.Itens)
-                .Where(p => p.Status == "approved" && p.Ordem.UsuarioId == usuarioId)
+                .ToListAsync();
+
+            
+            var totalFaturado = pagamentosUsuario
+                .Sum(p => p.Ordem.Itens
+                    .Where(i => db.produto.Any(prod => prod.Id == i.ProdutoId && prod.UsuarioId == usuarioId))
+                    .Sum(i => i.PrecoUnitario * i.Qtd));
+
+            
+            var totalVendas = pagamentosUsuario.Count;
+
+            
+            var ultimoPedido = pagamentosUsuario
                 .OrderByDescending(p => p.DataPagamento)
                 .Select(p => new
                 {
                     p.Ordem.Id,
                     Cliente = p.Ordem.UsuarioId,
                     p.DataPagamento,
-                    Itens = p.Ordem.Itens.Count,
-                    ValorTotal = p.Ordem.Total
+                    Itens = p.Ordem.Itens.Count(i => db.produto.Any(prod => prod.Id == i.ProdutoId && prod.UsuarioId == usuarioId)),
+                    ValorTotal = p.Ordem.Itens
+                        .Where(i => db.produto.Any(prod => prod.Id == i.ProdutoId && prod.UsuarioId == usuarioId))
+                        .Sum(i => i.PrecoUnitario * i.Qtd)
                 })
-                .FirstOrDefaultAsync();
+                .FirstOrDefault();
 
-            // Produto mais vendido pelo usuário
-            var produtoMaisVendido = await db.Pagamento
-                .Where(p => p.Status == "approved" && p.Ordem.UsuarioId == usuarioId)
+           
+            var produtoMaisVendido = pagamentosUsuario
                 .SelectMany(p => p.Produtos)
+                .Where(pp => pp.Produto.UsuarioId == usuarioId)
                 .GroupBy(pp => pp.ProdutoId)
                 .Select(g => new
                 {
@@ -595,13 +602,13 @@ public class ProdutoModule : CarterModule
                         prod.Valor,
                         ReceitaGerada = vendas.QtdVendida * prod.Valor
                     })
-                .FirstOrDefaultAsync();
+                .FirstOrDefault();
 
             return Results.Ok(new
             {
+                TotalProdutos = totalProdutos,
                 TotalFaturado = totalFaturado,
                 TotalVendas = totalVendas,
-                TotalProdutos = totalProdutos,
                 UltimoPedido = ultimoPedido,
                 ProdutoMaisVendido = produtoMaisVendido
             });
