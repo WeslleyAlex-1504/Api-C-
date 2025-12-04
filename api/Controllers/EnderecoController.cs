@@ -74,15 +74,15 @@ public class EnderecoModule : CarterModule
 
         }).WithTags("Endereços");
 
-        app.MapGet("/endereco", async (AppDbContext db, string? cpf, string? cep, string? cidade, string? estado) =>
+        app.MapGet("/endereco", async (AppDbContext db, int? id, string? cep, string? cidade, string? estado) =>
         {
             var query = db.endereco.AsQueryable();
 
-            if (!string.IsNullOrEmpty(cpf))
+            if (id != 0) 
             {
-                var usuario = await db.usuario.FirstOrDefaultAsync(u => u.Cpf == cpf);
+                var usuario = await db.usuario.FirstOrDefaultAsync(u => u.Id == id);
                 if (usuario == null)
-                    return Results.NotFound(new { message = "Usuário com este CPF não encontrado." });
+                    return Results.NotFound(new { message = "Usuário com este Id não encontrado." });
 
                 query = query.Where(e => e.UsuarioId == usuario.Id);
             }
