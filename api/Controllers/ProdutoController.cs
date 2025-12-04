@@ -542,5 +542,71 @@ public class ProdutoModule : CarterModule
     }).WithTags("Checkout").RequireAuthorization();
 
 
+    app.MapGet("/api/dashboard/{usuarioId}", async (int usuarioId, AppDbContext db) =>
+        {
+            // Total faturado do usuário
+            var totalFaturado = await db.Pagamento
+                .Where(p => p.Status == "approved" && p.Ordem.UsuarioId == usuarioId)
+                .SumAsync(p => p.Ordem.Total);
+
+            // Total de vendas do usuário
+            var totalVendas = await db.Pagamento
+                .Where(p => p.Status == "approved" && p.Ordem.UsuarioId == usuarioId)
+                .CountAsync();
+
+            // Total de produtos (isso normalmente é geral, mas você pode adaptar)
+            var totalProdutos = await db.produto.CountAsync();
+
+            // Último pedido aprovado do usuário
+            var ultimoPedido = await db.Pagamento
+                .Include(p => p.Ordem)
+                .ThenInclude(o => o.Itens)
+                .Where(p => p.Status == "approved" && p.Ordem.UsuarioId == usuarioId)
+                .OrderByDescending(p => p.DataPagamento)
+                .Select(p => new
+                {
+                    p.Ordem.Id,
+                    Cliente = p.Ordem.UsuarioId,
+                    p.DataPagamento,
+                    Itens = p.Ordem.Itens.Count,
+                    ValorTotal = p.Ordem.Total
+                })
+                .FirstOrDefaultAsync();
+
+            // Produto mais vendido pelo usuário
+            var produtoMaisVendido = await db.Pagamento
+                .Where(p => p.Status == "approved" && p.Ordem.UsuarioId == usuarioId)
+                .SelectMany(p => p.Produtos)
+                .GroupBy(pp => pp.ProdutoId)
+                .Select(g => new
+                {
+                    ProdutoId = g.Key,
+                    QtdVendida = g.Sum(x => x.Qtd)
+                })
+                .OrderByDescending(x => x.QtdVendida)
+                .Join(db.produto,
+                    vendas => vendas.ProdutoId,
+                    prod => prod.Id,
+                    (vendas, prod) => new
+                    {
+                        prod.Nome,
+                        prod.Img,
+                        vendas.QtdVendida,
+                        prod.Valor,
+                        ReceitaGerada = vendas.QtdVendida * prod.Valor
+                    })
+                .FirstOrDefaultAsync();
+
+            return Results.Ok(new
+            {
+                TotalFaturado = totalFaturado,
+                TotalVendas = totalVendas,
+                TotalProdutos = totalProdutos,
+                UltimoPedido = ultimoPedido,
+                ProdutoMaisVendido = produtoMaisVendido
+            });
+        });
+
+
     }
 }
