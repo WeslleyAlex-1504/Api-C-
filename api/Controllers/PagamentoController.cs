@@ -251,6 +251,21 @@ public class PagamentoModule : CarterModule
                 if (produto == null)
                     return Results.BadRequest($"Produto {item.ProdutoId} não encontrado");
 
+                // Buscar estoque separado
+                var estoque = await db.estoque.FirstOrDefaultAsync(e => e.ProdutoId == item.ProdutoId && e.Ativo);
+
+                if (estoque == null)
+                    return Results.BadRequest($"Não existe estoque registrado para o produto {produto.Nome}");
+
+                if (estoque.QtdEstoque < item.Qtd)
+                    return Results.BadRequest($"Estoque insuficiente para o produto {produto.Nome} (Disponível: {estoque.QtdEstoque})");
+
+                // ➤ Baixar estoque corretamente
+                estoque.QtdEstoque -= item.Qtd;
+
+                db.estoque.Update(estoque);
+
+                // Criar item da ordem
                 db.OrdemItem.Add(new OrdemItem
                 {
                     OrdemId = ordem.Id,
@@ -399,7 +414,6 @@ public class PagamentoModule : CarterModule
 
             string? paymentId = null;
 
-            // Obter paymentId do webhook corretamente
             if (json.TryGetProperty("data", out var dataElement))
             {
                 if (dataElement.TryGetProperty("id", out var id))
@@ -408,54 +422,76 @@ public class PagamentoModule : CarterModule
                 }
             }
 
-            // fallback direto no top-level "id"
             if (paymentId == null && json.TryGetProperty("id", out var topId))
             {
                 paymentId = topId.GetString();
             }
 
             if (paymentId == null)
-                return Results.Ok(); // nada a fazer
+                return Results.Ok();
 
-            // Buscar pagamento no MercadoPago com tratamento de erro
             var paymentClient = new MercadoPago.Client.Payment.PaymentClient();
             MercadoPago.Resource.Payment.Payment? mpPayment;
+
             try
             {
                 mpPayment = await paymentClient.GetAsync(long.Parse(paymentId));
             }
-            catch (Exception ex)
+            catch
             {
-                // Log ex se quiser
-                return Results.Ok(); // evita crash
+                return Results.Ok();
             }
 
             if (mpPayment == null || string.IsNullOrEmpty(mpPayment.ExternalReference))
                 return Results.Ok();
 
-            // Buscar pagamento local via ExternalReference
             if (!int.TryParse(mpPayment.ExternalReference, out int pagamentoIdLocal))
                 return Results.Ok();
 
-            var pagamento = await db.Pagamento
-                .Include(p => p.Ordem)
-                .FirstOrDefaultAsync(p => p.Id == pagamentoIdLocal);
+            var pagamento = await db.Pagamento.FirstOrDefaultAsync(p => p.Id == pagamentoIdLocal);
+
+            var ordem = await db.Ordem
+                .Include(o => o.Itens)
+                .FirstOrDefaultAsync(o => o.Id == pagamento.OrdemId);
 
             if (pagamento == null)
                 return Results.Ok();
 
-            // Atualizar status local
+            // Atualiza status local
             pagamento.Status = mpPayment.Status;
+
+            // ============================================================
+            // 1) SE O PAGAMENTO FOI APROVADO
+            // ============================================================
             if (mpPayment.Status == "approved")
             {
-                pagamento.Ordem.Status = "finalizada";
-                pagamento.Ordem.DataFinalizacao = DateTime.Now;
+                ordem.Status = "finalizada";
+                ordem.DataFinalizacao = DateTime.Now;
                 pagamento.DataPagamento = DateTime.Now;
+            }
+
+            // ============================================================
+            // 2) SE O PAGAMENTO NÃO FOI CONCLUÍDO → DEVOLVE O ESTOQUE
+            // ============================================================
+            string[] deveRepor = { "rejected", "cancelled", "refunded", "charged_back", "expired" };
+
+            if (deveRepor.Contains(mpPayment.Status) && !pagamento.EstoqueReposto)
+            {
+                foreach (var item in ordem.Itens)
+                {
+                    var estoque = await db.estoque.FirstOrDefaultAsync(e => e.ProdutoId == item.ProdutoId);
+
+                    if (estoque != null)
+                    {
+                        estoque.QtdEstoque += item.Qtd;
+                    }
+                }
+
+                pagamento.EstoqueReposto = true;
             }
 
             await db.SaveChangesAsync();
 
-            // Enviar status via SignalR
             await hub.Clients.All.SendAsync("ReceiveMessage", new
             {
                 PagamentoId = pagamento.Id,

@@ -32,6 +32,7 @@ public class Pagamento
     public DateTime DataCriacao { get; set; }
     public DateTime? DataPagamento { get; set; }
     public bool Ativo { get; set; }
+    public bool EstoqueReposto { get; set; } = false;
 
 
     public List<PagamentoProduto> Produtos { get; set; } = new();
