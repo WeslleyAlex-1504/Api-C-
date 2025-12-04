@@ -50,13 +50,37 @@ public class PagamentoModule : CarterModule
             if (estoque == null || estoque.QtdEstoque <= 0)
                 return Results.BadRequest(new { message = "Produto sem estoque disponível." });
 
-            bool existe = await db.itemCarrinho.AnyAsync(ci =>
-                ci.UsuarioId == item.UsuarioId && ci.ProdutoId == item.ProdutoId);
-            if (existe)
-                return Results.BadRequest(new { message = "Este produto já está no carrinho." });
+            var itemExistente = await db.itemCarrinho
+                .FirstOrDefaultAsync(ci => ci.UsuarioId == item.UsuarioId && ci.ProdutoId == item.ProdutoId);
+
+            if (itemExistente != null)
+            {
+                int novaQtd = itemExistente.Qtd + item.Qtd;
+
+                if (novaQtd > estoque.QtdEstoque + itemExistente.Qtd)
+                    return Results.BadRequest(new
+                    {
+                        message = $"Quantidade total maior que o estoque disponível ({estoque.QtdEstoque})."
+                    });
+
+                estoque.QtdEstoque -= item.Qtd;
+                db.estoque.Update(estoque);
+
+                itemExistente.Qtd = novaQtd;
+                db.itemCarrinho.Update(itemExistente);
+
+                await db.SaveChangesAsync();
+
+                return Results.Ok(new
+                {
+                    message = "Quantidade atualizada no carrinho.",
+                    itemCarrinho = itemExistente,
+                    estoqueAtual = estoque.QtdEstoque
+                });
+            }
 
             if (item.Qtd > estoque.QtdEstoque)
-                return Results.BadRequest(new { message = $"Quantidade solicitada maior que o estoque disponível ({estoque.QtdEstoque})." });
+                return Results.BadRequest(new { message = $"Quantidade solicitada maior que estoque disponível ({estoque.QtdEstoque})." });
 
             var novoItem = new CarrinhoItemModel
             {
