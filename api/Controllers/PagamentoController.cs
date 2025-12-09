@@ -617,8 +617,65 @@ public class PagamentoModule : CarterModule
                 return Results.NotFound(new { message = "Nenhuma ordem aprovada encontrada." });
 
             return Results.Ok(ordensAprovadas);
-        })
-.WithTags("Historico")
-.RequireAuthorization();
+        }).WithTags("Historico").RequireAuthorization();
+
+        app.MapGet("/historico/todos", async (AppDbContext db) =>
+        {
+            var ordens = await db.Pagamento
+                .Where(p => p.Status == "approved" || p.Status == "pending")
+                .Include(p => p.Ordem)
+                    .ThenInclude(o => o.Itens)
+                        .ThenInclude(i => i.Produto)
+                .Include(p => p.Ordem)
+                    .ThenInclude(o => o.Itens)
+                        .ThenInclude(i => i.Produto.Categoria)
+                .OrderByDescending(p => p.DataPagamento)
+                .Select(p => new
+                {
+                    pagamentoId = p.Id,
+                    statusPagamento = p.Status,
+                    dataPagamento = p.DataPagamento,
+
+                    ordem = new
+                    {
+                        ordemId = p.Ordem.Id,
+                        usuarioId = p.Ordem.UsuarioId, // 🔥 Agora inclui o dono do pedido
+                        total = p.Ordem.Total,
+                        status = p.Ordem.Status,
+                        dataCriacao = p.Ordem.DataCriacao,
+                        dataFinalizacao = p.Ordem.DataFinalizacao,
+
+                        itens = p.Ordem.Itens.Select(i => new
+                        {
+                            produtoId = i.ProdutoId,
+                            qtd = i.Qtd,
+                            precoUnit = i.PrecoUnitario,
+                            subtotal = i.Qtd * i.PrecoUnitario,
+
+                            produto = new
+                            {
+                                id = i.Produto.Id,
+                                nome = i.Produto.Nome,
+                                descricao = i.Produto.Descricao,
+                                valor = i.Produto.Valor,
+                                img = i.Produto.Img,
+                                desconto = i.Produto.Desconto,
+                                categoriaId = i.Produto.CategoriaId,
+                                categoria = i.Produto.Categoria != null ? i.Produto.Categoria.Nome : null,
+                                usuarioId = i.Produto.UsuarioId,
+                                estado = i.Produto.Estado,
+                                cep = i.Produto.Cep,
+                                ativo = i.Produto.Ativo
+                            }
+                        }).ToList()
+                    }
+                })
+                .ToListAsync();
+
+            if (!ordens.Any())
+                return Results.NotFound(new { message = "Nenhuma compra encontrada." });
+
+            return Results.Ok(ordens);
+        }).WithTags("Historico").RequireAuthorization();
     }
 }
