@@ -148,7 +148,9 @@ public class ProdutoModule : CarterModule
 
     app.MapGet("/produto", async (AppDbContext db,int? id,int? usuarioId, bool ? ativo, string ? vendedorNome, string? categoriaNome, string? nome, decimal? valorMinimo, decimal? valorMaximo, int skip = 0, int take = 20) =>
         {
-            var query = db.produto.AsQueryable();
+            var query = db.produto
+               .Include(p => p.Categoria)
+               .AsQueryable();
 
             if (usuarioId.HasValue)
             {

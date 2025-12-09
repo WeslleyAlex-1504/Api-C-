@@ -16,6 +16,9 @@ public class ProdutoModel
     public bool Ativo { get; set; } = true;
     public string Estado { get; set; }  
     public string Cep { get; set; }
+
+    [ForeignKey("CategoriaId")]
+    public CategoriaModel Categoria { get; set; }
 }
 
 public class ProdutoPatchDados
