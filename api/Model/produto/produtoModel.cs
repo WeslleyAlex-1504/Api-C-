@@ -11,8 +11,12 @@ public class ProdutoModel
     public decimal Valor { get; set; }
     public string Img { get; set; } 
     public int UsuarioId { get; set; }
+    [ForeignKey("UsuarioId")]
+    public usuarioModel Usuario { get; set; } = null!;
     public decimal Desconto { get; set; } = 0;
     public int CategoriaId { get; set; }
+    [ForeignKey("CategoriaId")]
+    public CategoriaModel Categoria { get; set; } = null!;
     public bool Ativo { get; set; } = true;
     public string Estado { get; set; }  
     public string Cep { get; set; }

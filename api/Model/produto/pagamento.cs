@@ -17,6 +17,7 @@ public class OrdemItem
     public int Id { get; set; }
     public int OrdemId { get; set; }
     public int ProdutoId { get; set; }
+    public ProdutoModel Produto { get; set; }
     public int Qtd { get; set; }
     public decimal PrecoUnitario { get; set; }
 }

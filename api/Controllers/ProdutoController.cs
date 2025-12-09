@@ -149,8 +149,9 @@ public class ProdutoModule : CarterModule
     app.MapGet("/produto", async (AppDbContext db,int? id,int? usuarioId, bool ? ativo, string ? vendedorNome, string? categoriaNome, string? nome, decimal? valorMinimo, decimal? valorMaximo, int skip = 0, int take = 20) =>
         {
             var query = db.produto
-               .Include(p => p.Categoria)
-               .AsQueryable();
+              .Include(p => p.Usuario)      
+              .Include(p => p.Categoria)    
+              .AsQueryable();
 
             if (usuarioId.HasValue)
             {
@@ -202,7 +203,24 @@ public class ProdutoModule : CarterModule
 
             query = query.Skip(skip).Take(take);
 
-            var produtos = await query.ToListAsync();
+            var produtos = await query
+            .Select(p => new
+            {
+                p.Id,
+                p.Nome,
+                p.Descricao,
+                p.Valor,
+                p.Img,
+                p.UsuarioId,
+                UsuarioNome = p.Usuario.Nome,      
+                p.Desconto,
+                p.CategoriaId,
+                CategoriaNome = p.Categoria.Nome, 
+                p.Ativo,
+                p.Estado,
+                p.Cep
+            })
+            .ToListAsync();
             return Results.Ok(produtos);
         }).WithTags("Produtos");
 
