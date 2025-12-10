@@ -464,6 +464,26 @@ public class PagamentoModule : CarterModule
                 ordem.Status = "finalizada";
                 ordem.DataFinalizacao = DateTime.Now;
                 pagamento.DataPagamento = DateTime.Now;
+
+                
+                foreach (var item in ordem.Itens)
+                {
+                    var carrinhoItem = await db.itemCarrinho
+                        .FirstOrDefaultAsync(ci => ci.UsuarioId == ordem.UsuarioId && ci.ProdutoId == item.ProdutoId);
+
+                    if (carrinhoItem != null)
+                    {
+                        if (carrinhoItem.Qtd > item.Qtd)
+                        {                         
+                            carrinhoItem.Qtd -= item.Qtd;
+                            db.itemCarrinho.Update(carrinhoItem);
+                        }
+                        else
+                        {
+                            db.itemCarrinho.Remove(carrinhoItem);
+                        }
+                    }
+                }
             }
 
             string[] deveRepor = { "rejected", "cancelled", "refunded", "charged_back", "expired" };
@@ -551,7 +571,7 @@ public class PagamentoModule : CarterModule
                 response.EnsureSuccessStatusCode();
 
                 var json = await response.Content.ReadAsStringAsync();
-                return Results.Ok(json); // Retorna o JSON do token
+                return Results.Ok(json); 
             }
             catch (Exception ex)
             {
@@ -568,7 +588,7 @@ public class PagamentoModule : CarterModule
                         .ThenInclude(i => i.Produto)
                 .Include(p => p.Ordem)
                     .ThenInclude(o => o.Itens)
-                        .ThenInclude(i => i.Produto.Categoria) // Se quiser a Categoria
+                        .ThenInclude(i => i.Produto.Categoria)
                 .OrderByDescending(p => p.DataPagamento)
                 .Select(p => new
                 {
@@ -584,7 +604,6 @@ public class PagamentoModule : CarterModule
                         dataCriacao = p.Ordem.DataCriacao,
                         dataFinalizacao = p.Ordem.DataFinalizacao,
 
-                        // 🔥 AQUI SUPORTA VÁRIOS PRODUTOS
                         itens = p.Ordem.Itens.Select(i => new
                         {
                             produtoId = i.ProdutoId,
@@ -592,7 +611,7 @@ public class PagamentoModule : CarterModule
                             precoUnit = i.PrecoUnitario,
                             subtotal = i.Qtd * i.PrecoUnitario,
 
-                            // 🔥 Produto completo
+                          
                             produto = new
                             {
                                 id = i.Produto.Id,
@@ -639,7 +658,7 @@ public class PagamentoModule : CarterModule
                     ordem = new
                     {
                         ordemId = p.Ordem.Id,
-                        usuarioId = p.Ordem.UsuarioId, // 🔥 Agora inclui o dono do pedido
+                        usuarioId = p.Ordem.UsuarioId,
                         total = p.Ordem.Total,
                         status = p.Ordem.Status,
                         dataCriacao = p.Ordem.DataCriacao,
