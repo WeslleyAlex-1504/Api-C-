@@ -146,7 +146,7 @@ public class ProdutoModule : CarterModule
 
 }).WithTags("Categorias").RequireAuthorization();
 
-    app.MapGet("/produto", async (AppDbContext db,int? id,int? usuarioId, bool ? ativo, string ? vendedorNome, string? categoriaNome, string? nome, decimal? valorMinimo, decimal? valorMaximo, int skip = 0, int take = 20) =>
+    app.MapGet("/produto", async (AppDbContext db,int? id,int? usuarioId, bool ? ativo, string ? vendedorNome, string? categoriaNome, string? nome, decimal? valorMinimo, decimal? valorMaximo, int skip = 0, int take = 1000000) =>
         {
             var query = db.produto
               .Include(p => p.Usuario)      
